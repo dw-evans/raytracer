@@ -68,25 +68,47 @@ def raySphere(ray: Ray, spherePos: np.ndarray, rad: float) -> HitInfo:
 from typing import Iterable
 
 
-def iter_to_bytes(iterable: Iterable[BytesObject]) -> bytearray:
+def iter_to_bytes(iterable: Iterable[ByteableObject]) -> bytearray:
     ret = bytearray()
     for x in iterable:
         ret.extend(x.tobytes())
     return ret
 
 
-class BytesObject(Protocol):
+class ByteableObject(Protocol):
     def tobytes(self) -> bytes | bytearray: ...
 
 
-class Sphere(BytesObject):
-    def __init__(self, pos: Vector3, radius: float, material: Vector4) -> None:
+class Sphere(ByteableObject):
+    def __init__(self, pos: Vector3, radius: float, material: Material) -> None:
         self.pos = pos
         self.radius = radius
         self.material = material
 
     def tobytes(self):
-        return struct.pack("3f f 4f", *self.pos, self.radius, *self.material)
+        return struct.pack("3f f", *self.pos, self.radius) + self.material.tobytes()
+
+
+class Material(ByteableObject):
+
+    def __init__(
+        self,
+        color: Vector4,
+        emissionColor: Vector3,
+        emissionStrength: float,
+    ) -> None:
+        self.color = color
+        self.emissionColor = emissionColor
+        self.emissionStrength = emissionStrength
+
+    def tobytes(self):
+        return struct.pack(
+            "4f 3f f", *self.color, *self.emissionColor, self.emissionStrength
+        )
+        # return struct.pack(
+        #     "4f",
+        #     *self.color,
+        # )
 
 
 class Camera:
@@ -118,9 +140,9 @@ class Camera:
 
 cam = Camera()
 
-h = 120
+h = 1080
 w = int(h * cam.aspect)
-SCALE_FACTOR = 3
+SCALE_FACTOR = 1
 pygame.init()
 
 screen = pygame.display.set_mode(
@@ -134,10 +156,10 @@ clock = pygame.time.Clock()
 shader_vertex = ""
 shader_fragment = ""
 
-with open("shaders_v2/fs.glsl") as f:
+with open("shaders/fs.glsl") as f:
     shader_fragment = f.read()
 
-with open("shaders_v2/vs.glsl") as f:
+with open("shaders/vs.glsl") as f:
     shader_vertex = f.read()
 
 ctx = moderngl.create_context()
@@ -165,17 +187,65 @@ vertices = np.array(
     dtype="f4",
 )
 
+material1 = Material(
+    Vector4((1.0, 1.0, 0.0, 1.0)),
+    Vector3((0.0, 0.0, 0.0)),
+    0.0,
+)
+material2 = Material(
+    Vector4((0.6, 0.3, 1.0, 1.0)),
+    Vector3((0.0, 0.0, 0.0)),
+    0.0,
+)
+# light source
+material3 = Material(
+    Vector4((0.5, 0.3, 0.8, 1.0)),
+    Vector3((0.5, 0.3, 0.8)),
+    0.3,
+)
+material4 = Material(
+    Vector4((0.1, 0.7, 0.3, 1.0)),
+    Vector3((0.0, 0.0, 0.0)),
+    0.0,
+)
+
+
 spheres = [
+    Sphere(
+        pos=Vector3((0.0, -1001.0, 8)),
+        radius=1000.0,
+        material=material4,
+    ),
     Sphere(
         pos=Vector3((0.0, 0.0, 10.0)),
         radius=1.0,
-        material=Vector4((0.0, 1.0, 0.0, 1.0)),
+        material=material1,
     ),
     Sphere(
-        pos=Vector3((0.0, 1.0, 8.0)),
+        pos=Vector3((2.0, 0.0, 10.0)),
         radius=0.5,
-        material=Vector4((1.0, 0.0, 0.0, 1.0)),
+        material=material2,
     ),
+    Sphere(
+        pos=Vector3((-3.0, 0.0, 10.0)),
+        radius=0.9,
+        material=material2,
+    ),
+    Sphere(
+        pos=Vector3((-2.0, 0.0, 7.0)),
+        radius=0.6,
+        material=material3,
+    ),
+    # Sphere(
+    #     pos=Vector3((0.0, 13, 10)),
+    #     radius=0.8,
+    #     material=material3,
+    # ),
+    # Sphere(
+    #     pos=Vector3((0.0, 7, 10)),
+    #     radius=0.6,
+    #     material=material2,
+    # ),
 ]
 
 buffer1 = ctx.buffer(vertices.tobytes())
@@ -188,9 +258,15 @@ vao = ctx.vertex_array(
 )
 
 
+fbo = ctx.framebuffer(color_attachments=[ctx.texture((w, h), 3)])
+fbo.clear()
+
 # initialise the uniforms
 
 cam.orientation = Matrix44.identity()
+
+program["screenWidth"].write(struct.pack("i", w))
+program["screenHeight"].write(struct.pack("i", h))
 
 program["ViewParams"].write(cam.view_params.astype("f4"))
 program["CamLocalToWorldMatrix"].write(cam.local_to_world_matrix.astype("f4"))
@@ -198,6 +274,9 @@ program["CamGlobalPos"].write(cam.pos.astype("f4"))
 
 sphere_buffer_binding = 1
 program["sphereBuffer"].binding = sphere_buffer_binding
+
+# program["frameBuffer"]
+
 
 running = True
 try:
@@ -209,26 +288,25 @@ try:
                 sys.exit()
 
         time = pygame.time.get_ticks() / np.float32(1000.0)
+        # time = 0.0
         # program["time"].write(time.astype("f4"))
 
         # render_object.render(mode=moderngl.TRIANGLE_STRIP)
 
         program["spheresCount"].write(struct.pack("i", len(spheres)))
 
-        spheres[0].pos.x = 1 * sin(time * 5)
-        spheres[0].pos.y = 1.5 * cos(time * 3)
-        spheres[0].pos.z = 12 + 4 * cos(time * 1)
+        spheres[4].pos.x = 2 * sin(time * 2.1)
+        spheres[4].pos.y = 5 + 3 * cos(time * 1.9)
+        spheres[4].pos.z = 8 + 5 * cos(time * 1.1)
 
-        spheres[1].pos.x = 1.5 * sin(time * 2)
-        spheres[1].pos.y = 0.5 * cos(time * 6)
-        spheres[1].pos.z = 12 + 8 * cos(time * 1)
+        # spheres[1].pos.x = 1.5 * sin(time * 2)
+        # spheres[1].pos.y = 0.5 * cos(time * 6)
+        # spheres[1].pos.z = 12 + 8 * cos(time * 1)
 
         # sphere_bytes = struct.pack("<i", len(spheres))
         sphere_bytes = b""
         for sphere in spheres:
-            sphere_bytes += struct.pack(
-                "3f f 4f", *sphere.pos, sphere.radius, *sphere.material
-            )
+            sphere_bytes += sphere.tobytes()
         sphere_bytes += b"\x00" * (16 - len(sphere_bytes) % 16)
 
         # sphere_bytes = struct.pack("i", len(spheres)) + iter_to_bytes(spheres)
@@ -240,7 +318,9 @@ try:
         vao.render(mode=moderngl.TRIANGLE_STRIP)
 
         pygame.display.flip()
-        clock.tick(144)
+        clock.tick(24)
+
+        pass
 
 except KeyboardInterrupt:
     pass

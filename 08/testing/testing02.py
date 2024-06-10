@@ -29,12 +29,38 @@ out vec4 color;
 uniform uint screenWidth;
 uniform uint screenHeight;
 
+
+float inf = 1.0 / 0.0;
+float pi = 3.14159265359;
+
+
 float randomValue(inout uint state) 
 {
     state *= (state + uint(195439)) * (state + uint(124395)) * (state + uint(845921));
     return state / 4294967295.0;
 }
 
+vec3 randomDirection(inout uint rngState) 
+// calculates a random vector in a sphere
+{
+    float u = randomValue(rngState);
+    float v = randomValue(rngState);
+
+    float theta = 2.0 * pi * u;
+    float phi = acos(2.0 * v - 1.0);
+
+    return vec3(
+        sin(phi) * cos(theta),
+        sin(phi) * sin(theta),
+        cos(phi)
+    );
+}
+vec3 randomDirectionHemisphere(vec3 normal, inout uint rngState) 
+{
+    vec3 randomDir = randomDirection(rngState);
+    // return normal;
+    return sign(dot(randomDir, normal)) * randomDir;
+}
 
 void main() 
 {
@@ -43,11 +69,8 @@ void main()
     uint pxId = uint(pxCoord.x * screenWidth * screenHeight) + uint(pxCoord.y * screenHeight);
     
     uint rngState = pxId;
-
     color = vec4(
-        randomValue(rngState),
-        randomValue(rngState),
-        randomValue(rngState),
+        randomDirectionHemisphere(vec3(0,0,1), rngState),
         1.0
     );
 }
