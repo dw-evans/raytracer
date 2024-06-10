@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pygame
 import moderngl
 import os
@@ -8,34 +10,38 @@ from numpy import sin, cos, tan, radians
 from array import array
 from pathlib import Path
 
+import struct
+
 from pyrr import Vector3, Matrix44, Vector4
 
+from typing import Protocol
+
+
 os.chdir(Path(__file__).parent)
-print(os.getcwd())
 
 
 class HitInfo:
     def __init__(self) -> None:
-        self.didHit:bool = False
-        self.dst:float = np.inf
-        self.hitPoint = np.array([0.,0.,0.])
-        self.normal = np.array([0.,0.,0.])
+        self.didHit: bool = False
+        self.dst: float = np.inf
+        self.hitPoint = np.array([0.0, 0.0, 0.0])
+        self.normal = np.array([0.0, 0.0, 0.0])
+
 
 class Ray:
     def __init__(self) -> None:
-        self.origin = np.array([0., 0., 0.])
-        self.dir = np.array([0., 0., 0.])
+        self.origin = np.array([0.0, 0.0, 0.0])
+        self.dir = np.array([0.0, 0.0, 0.0])
 
-
-# vec3 = np.ndarray[float, float, float]
 
 def normalize(v):
     norm = np.linalg.norm(v)
-    if norm == 0: 
-       return v
+    if norm == 0:
+        return v
     return v / norm
 
-def raySphere(ray:Ray, spherePos:np.ndarray, rad:float) -> HitInfo:
+
+def raySphere(ray: Ray, spherePos: np.ndarray, rad: float) -> HitInfo:
 
     ret = HitInfo()
 
@@ -48,7 +54,7 @@ def raySphere(ray:Ray, spherePos:np.ndarray, rad:float) -> HitInfo:
     discriminant = b * b - 4 * a * c
 
     if discriminant >= 0:
-        dst = (-b - np.sqrt(discriminant)) / (2*a)
+        dst = (-b - np.sqrt(discriminant)) / (2 * a)
 
         if dst >= 0:
             ret.didHit = True
@@ -56,15 +62,64 @@ def raySphere(ray:Ray, spherePos:np.ndarray, rad:float) -> HitInfo:
             ret.hitPoint = ray.origin + ray.dir * dst
             ret.normal = normalize(ret.hitPoint - spherePos)
 
-
     return ret
 
-USE_SHADERS = True
 
-cam_aspect = 16.0 / 9.0
+from typing import Iterable
+
+
+def iter_to_bytes(iterable: Iterable[BytesObject]) -> bytearray:
+    ret = bytearray()
+    for x in iterable:
+        ret.extend(x.tobytes())
+    return ret
+
+
+class BytesObject(Protocol):
+    def tobytes(self) -> bytes | bytearray: ...
+
+
+class Sphere(BytesObject):
+    def __init__(self, pos: Vector3, radius: float, material: Vector4) -> None:
+        self.pos = pos
+        self.radius = radius
+        self.material = material
+
+    def tobytes(self):
+        return struct.pack("3f f 4f", *self.pos, self.radius, *self.material)
+
+
+class Camera:
+    def __init__(self) -> None:
+        self.fov = 30.0  # degrees
+        self.aspect = 16.0 / 9.0
+        self.near_plane = 240.0
+        self.pos = Vector3((0.0, 0.0, 0.0))
+        self.orientation = Matrix44.identity()
+
+    @property
+    def plane_height(self):
+        return self.near_plane * tan(radians(self.fov) * 0.5) * 2.0
+
+    @property
+    def plane_width(self):
+        return self.plane_height * self.aspect
+
+    @property
+    def local_to_world_matrix(self):
+        return self.orientation.inverse * Matrix44.from_translation(-1 * self.pos)
+
+    @property
+    def view_params(self):
+        return Vector3(
+            [self.plane_width, self.plane_height, self.near_plane],
+        )
+
+
+cam = Camera()
 
 h = 120
-w = int(h * cam_aspect)
+w = int(h * cam.aspect)
 SCALE_FACTOR = 3
 pygame.init()
 
@@ -74,18 +129,6 @@ screen = pygame.display.set_mode(
 )
 
 clock = pygame.time.Clock()
-
-ctx = moderngl.create_context()
-
-vertices = ctx.buffer(
-    array('f', [
-        -1.0, 1.0, 0.,
-        1.0, 1.0, 0.,
-        -1.0, -1.0, 0.,
-        1.0, -1.0, 0.,
-    ])
-)
-
 
 # get the vertex and fragment shaders
 shader_vertex = ""
@@ -97,190 +140,107 @@ with open("shaders_v2/fs.glsl") as f:
 with open("shaders_v2/vs.glsl") as f:
     shader_vertex = f.read()
 
+ctx = moderngl.create_context()
 
 program = ctx.program(
     vertex_shader=shader_vertex,
     fragment_shader=shader_fragment,
 )
 
-# vbo = ctx.buffer(vertices.tobytes())
-
-render_object = ctx.vertex_array(
-    program,
-    [(vertices, "3f", "position")]
+vertices = np.array(
+    [
+        -1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        -1.0,
+        -1.0,
+        0.0,
+        1.0,
+        -1.0,
+        0.0,
+    ],
+    dtype="f4",
 )
 
-# render_object = ctx.vertex_array(
-#     program,
-#     vbo,
-#     "position",
-# )
+spheres = [
+    Sphere(
+        pos=Vector3((0.0, 0.0, 10.0)),
+        radius=1.0,
+        material=Vector4((0.0, 1.0, 0.0, 1.0)),
+    ),
+    Sphere(
+        pos=Vector3((0.0, 1.0, 8.0)),
+        radius=0.5,
+        material=Vector4((1.0, 0.0, 0.0, 1.0)),
+    ),
+]
+
+buffer1 = ctx.buffer(vertices.tobytes())
+
+vao = ctx.vertex_array(
+    program,
+    [
+        (buffer1, "3f", "position"),
+    ],
+)
 
 
 # initialise the uniforms
 
-cam_fov = 28.072
-cam_near_plane = 240.0
+cam.orientation = Matrix44.identity()
 
-cam_orientation = Matrix44.identity()
+program["ViewParams"].write(cam.view_params.astype("f4"))
+program["CamLocalToWorldMatrix"].write(cam.local_to_world_matrix.astype("f4"))
+program["CamGlobalPos"].write(cam.pos.astype("f4"))
 
-plane_height = cam_near_plane * tan(radians(cam_fov) * 0.5) * 2.0
-plane_width = plane_height * cam_aspect
+sphere_buffer_binding = 1
+program["sphereBuffer"].binding = sphere_buffer_binding
 
-view_params = Vector3(
-    [plane_width, plane_height, cam_near_plane],
-)
+running = True
+try:
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+                pygame.quit()
+                sys.exit()
 
-cam_global_pos = Vector3(
-    [0.0, 0.0, 0.0],
-)
+        time = pygame.time.get_ticks() / np.float32(1000.0)
+        # program["time"].write(time.astype("f4"))
 
-cam_local_to_world_matrix = Matrix44.identity()
+        # render_object.render(mode=moderngl.TRIANGLE_STRIP)
 
-if USE_SHADERS:
+        program["spheresCount"].write(struct.pack("i", len(spheres)))
 
-    program["ViewParams"].write(view_params.astype("f4"))
-    program["CamLocalToWorldMatrix"].write(cam_local_to_world_matrix.astype("f4"))
-    program["CamGlobalPos"].write(cam_global_pos.astype("f4"))
+        spheres[0].pos.x = 1 * sin(time * 5)
+        spheres[0].pos.y = 1.5 * cos(time * 3)
+        spheres[0].pos.z = 12 + 4 * cos(time * 1)
 
-    running = True
-    try:
-        while running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-                    pygame.quit()
-                    sys.exit()
+        spheres[1].pos.x = 1.5 * sin(time * 2)
+        spheres[1].pos.y = 0.5 * cos(time * 6)
+        spheres[1].pos.z = 12 + 8 * cos(time * 1)
 
-            time = pygame.time.get_ticks() / np.float32(1000.0)
-            program["time"].write(time.astype("f4"))
+        # sphere_bytes = struct.pack("<i", len(spheres))
+        sphere_bytes = b""
+        for sphere in spheres:
+            sphere_bytes += struct.pack(
+                "3f f 4f", *sphere.pos, sphere.radius, *sphere.material
+            )
+        sphere_bytes += b"\x00" * (16 - len(sphere_bytes) % 16)
 
-            render_object.render(mode=moderngl.TRIANGLE_STRIP)
+        # sphere_bytes = struct.pack("i", len(spheres)) + iter_to_bytes(spheres)
+        # sphere_bytes = iter_to_bytes(spheres)
+        sphere_buffer = ctx.buffer(sphere_bytes)
+        sphere_buffer_binding = 1
+        sphere_buffer.bind_to_uniform_block(sphere_buffer_binding)
 
-            pygame.display.flip()
-            clock.tick(60)
+        vao.render(mode=moderngl.TRIANGLE_STRIP)
 
-    except KeyboardInterrupt:
-        pass
-        
-# ray = Ray()
-# ray.origin = np.array([0,0,0])
-# ray.dir = np.array([0.0,0.09,1])
+        pygame.display.flip()
+        clock.tick(144)
 
-# spherePos = np.array([0.0,0,10])
-# rad = 1.0
-
-# res = raySphere(ray, spherePos, rad)
-# print(f"ray.origin={ray.origin}\nray.dir={ray.dir}\n")
-# print(f"res.didHit={res.didHit}\nres.dst={res.dst}\nres.hitPoint={res.hitPoint}\nres.normal={res.normal}\n\n")
-
-
-if not USE_SHADERS:
-
-
-    pygame.init()
-
-    screen = pygame.display.set_mode(
-        (w * SCALE_FACTOR, h * SCALE_FACTOR),
-        pygame.DOUBLEBUF,
-    )
-
-    clock = pygame.time.Clock()
-
-
-    rays = np.ndarray((w, h),dtype="object")
-
-    for i in range(w):
-        for j in range(h):
-            r = Ray()
-            r.origin = np.array([0,0,0])
-            r.dir = normalize([i-plane_width / 2, j-plane_height / 2, cam_near_plane])
-            rays[i,j] = r
-            # rays[i,j] = np.array([0,0,0]) - np.array([])
-
-
-    running = True
-
-    """
-    vec3 viewPointLocal = (vec3(position.xy - 0.5, 1) * ViewParams);
-    vec3 viewPoint = (CamLocalToWorldMatrix * vec4(viewPointLocal.xyz, 1.0)).xyz;
-
-    Ray ray;
-    ray.origin = CamGlobalPos;
-    ray.dir = normalize(viewPoint - ray.origin);
-    """
-
-    try:
-        while running:
-            for event in pygame.event.get():
-                # only do something if the event is of type QUIT
-                if event.type == pygame.QUIT:
-                    # change the value to False, to exit the main loop
-                    running = False
-
-            screen.fill((10, 10, 10))
-
-            for i in range(w):
-                for j in range(h):
-                    rect = pygame.Rect(i*SCALE_FACTOR, j*SCALE_FACTOR, SCALE_FACTOR, SCALE_FACTOR)
-
-                    ray:Ray = rays[i, j]
-                    hit = raySphere(ray, np.array([0.0, 0.0, 5.0]), 1.0)
-
-                    pos = Vector3([
-                        (i - plane_width / 2) / plane_width, 
-                        (j - plane_height / 2) / plane_height, 
-                        1.0,
-                    ])
-
-                    viewPointLocal = Vector3([
-                        pos.x * plane_width, 
-                        pos.y * plane_height, 
-                        pos.z * cam_near_plane,
-                    ])
-
-                    viewPoint = cam_local_to_world_matrix * Vector4(
-                        [viewPointLocal.x, viewPointLocal.y, viewPointLocal.z, 1.0]
-                    )
-                    viewPoint = Vector3(viewPointLocal.xyz)
-
-                    r.origin
-
-                    x = viewPoint - ray.origin
-                    x.normalise()
-
-                    if hit.didHit:
-                        pass
-
-
-                    color=(
-                        abs(hit.normal[0])*255,
-                        abs(hit.normal[1])*255,
-                        abs(hit.normal[2])*255,
-                    )
-
-                    # color=(
-                    #     max(hit.normal[0], 0)*255,
-                    #     max(hit.normal[1], 0)*255,
-                    #     max(hit.normal[2], 0)*255,
-                    # )
-
-                    # color = np.maximum(np.minimum(ray.dir * 255 * 1e6, 255), 0)
-
-                    pygame.draw.rect(
-                        surface=screen, 
-                        color=color,
-                        rect=rect,
-                    )
-
-
-
-            pygame.display.flip()
-            clock.tick(1)
-            
-
-    except KeyboardInterrupt:
-        pass
-
-
-# pass
+except KeyboardInterrupt:
+    pass
