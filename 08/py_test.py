@@ -117,7 +117,16 @@ class Camera:
         self.aspect = 16.0 / 9.0
         self.near_plane = 240.0
         self.pos = Vector3((0.0, 0.0, 0.0))
-        self.orientation = Matrix44.identity()
+        # self.orientation = Matrix44.identity()
+        self.roll = 0.0
+        self.pitch = 0.0
+        self.yaw = 0.0
+
+    @property
+    def orientation(self):
+        return Matrix44.from_eulers(
+            [radians(x) for x in [self.roll, self.pitch, self.yaw]]
+        )
 
     @property
     def plane_height(self):
@@ -137,6 +146,25 @@ class Camera:
             [self.plane_width, self.plane_height, self.near_plane],
         )
 
+    def rotate(self, axis: str, rot_deg: int | float | Iterable[int | float]):
+        if not isinstance(rot_deg, Iterable):
+            degs = [rot_deg]
+
+        if not len(axis) == len(degs):
+            raise Exception("Incorrect length match")
+        for axis, deg in zip(axis, degs):
+            if axis == "x":
+                self.orientation.from_x_rotation(radians(deg))
+                pass
+            elif axis == "y":
+                self.orientation.from_y_rotation(radians(deg))
+                pass
+            elif axis == "z":
+                self.orientation.from_z_rotation(radians(deg))
+                pass
+
+
+STATIC_RENDER = False
 
 cam = Camera()
 
@@ -199,14 +227,20 @@ material2 = Material(
 )
 # light source
 material3 = Material(
-    Vector4((0.5, 0.3, 0.8, 1.0)),
-    Vector3((0.5, 0.3, 0.8)),
-    0.3,
+    Vector4((0.0, 0.0, 0.0, 1.0)),
+    Vector3((0.4, 0.0, 0.5)),
+    100.0,
 )
 material4 = Material(
     Vector4((0.1, 0.7, 0.3, 1.0)),
     Vector3((0.0, 0.0, 0.0)),
     0.0,
+)
+# light source
+material5 = Material(
+    Vector4((0.0, 0.0, 0.0, 1.0)),
+    Vector3((247 / 255, 214 / 255, 128 / 255)),
+    40.0,
 )
 
 
@@ -232,9 +266,14 @@ spheres = [
         material=material2,
     ),
     Sphere(
-        pos=Vector3((-2.0, 0.0, 7.0)),
+        pos=Vector3((-2.0, 1.5, 5.0)),
         radius=0.6,
         material=material3,
+    ),
+    Sphere(
+        pos=Vector3((5, 9.0, 12)),
+        radius=3.0,
+        material=material5,
     ),
     # Sphere(
     #     pos=Vector3((0.0, 13, 10)),
@@ -257,28 +296,37 @@ vao = ctx.vertex_array(
     ],
 )
 
-
-fbo = ctx.framebuffer(color_attachments=[ctx.texture((w, h), 3)])
-fbo.clear()
+texture = ctx.texture((w, h), 3)
+texture.use(location=1)
+program["previousFrame"] = 1
+# render_data = b"\x00" * w * h * 3
 
 # initialise the uniforms
-
-cam.orientation = Matrix44.identity()
-
 program["screenWidth"].write(struct.pack("i", w))
 program["screenHeight"].write(struct.pack("i", h))
 
 program["ViewParams"].write(cam.view_params.astype("f4"))
-program["CamLocalToWorldMatrix"].write(cam.local_to_world_matrix.astype("f4"))
-program["CamGlobalPos"].write(cam.pos.astype("f4"))
 
+# program["CamLocalToWorldMatrix"].write(cam.local_to_world_matrix.astype("f4"))
+# program["CamGlobalPos"].write(cam.pos.astype("f4"))
+
+program["spheresCount"].write(struct.pack("i", len(spheres)))
 sphere_buffer_binding = 1
 program["sphereBuffer"].binding = sphere_buffer_binding
 
-# program["frameBuffer"]
-
-
+frame_counter = 1
 running = True
+
+program["MAX_BOUNCES"].write(struct.pack("i", 6))
+program["RAYS_PER_PIXEL"].write(struct.pack("i", 128))
+
+if STATIC_RENDER:
+    # program["STATIC_RENDER"].write(struct.pack("?", STATIC_RENDER))
+    program["STATIC_RENDER"].value = STATIC_RENDER
+else:
+    # program["TOTAL_CYCLES"].write(struct.pack("I", 300))
+    pass
+
 try:
     while running:
         for event in pygame.event.get():
@@ -288,12 +336,8 @@ try:
                 sys.exit()
 
         time = pygame.time.get_ticks() / np.float32(1000.0)
-        # time = 0.0
-        # program["time"].write(time.astype("f4"))
 
-        # render_object.render(mode=moderngl.TRIANGLE_STRIP)
-
-        program["spheresCount"].write(struct.pack("i", len(spheres)))
+        program["frameNumber"].write(struct.pack("I", frame_counter))
 
         spheres[4].pos.x = 2 * sin(time * 2.1)
         spheres[4].pos.y = 5 + 3 * cos(time * 1.9)
@@ -303,19 +347,29 @@ try:
         # spheres[1].pos.y = 0.5 * cos(time * 6)
         # spheres[1].pos.z = 12 + 8 * cos(time * 1)
 
+        cam.yaw = 15 * sin(time / 4)
+        cam.pitch = 3 * sin(time / 15)
+        cam.roll = 6 * sin(time / 8)
+
+        program["CamLocalToWorldMatrix"].write(cam.local_to_world_matrix.astype("f4"))
+        program["CamGlobalPos"].write(cam.pos.astype("f4"))
+
         # sphere_bytes = struct.pack("<i", len(spheres))
-        sphere_bytes = b""
-        for sphere in spheres:
-            sphere_bytes += sphere.tobytes()
+        sphere_bytes = iter_to_bytes(spheres)
         sphere_bytes += b"\x00" * (16 - len(sphere_bytes) % 16)
 
-        # sphere_bytes = struct.pack("i", len(spheres)) + iter_to_bytes(spheres)
-        # sphere_bytes = iter_to_bytes(spheres)
         sphere_buffer = ctx.buffer(sphere_bytes)
         sphere_buffer_binding = 1
         sphere_buffer.bind_to_uniform_block(sphere_buffer_binding)
 
         vao.render(mode=moderngl.TRIANGLE_STRIP)
+
+        render_data = ctx.screen.read(components=3, dtype="f1")
+        texture.write(render_data)
+
+        # texture.release()
+
+        frame_counter += 1
 
         pygame.display.flip()
         clock.tick(24)

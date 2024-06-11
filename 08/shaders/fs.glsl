@@ -12,6 +12,20 @@ uniform mat4x4 CamLocalToWorldMatrix;
 uniform vec3 CamGlobalPos;
 uniform float time;
 
+const int SPHERES_COUNT_MAX = 256;
+float inf = 1.0 / 0.0;
+float pi = 3.14159265359;
+uniform int MAX_BOUNCES;
+uniform int RAYS_PER_PIXEL;
+
+uniform int spheresCount;
+
+uniform sampler2D previousFrame;
+
+uniform uint frameNumber;
+
+uniform bool STATIC_RENDER;
+
 struct Material
 {
     vec4 color;
@@ -27,15 +41,6 @@ struct Sphere
 };
 
 
-uniform int spheresCount;
-
-
-
-const int SPHERES_COUNT_MAX = 256;
-float inf = 1.0 / 0.0;
-float pi = 3.14159265359;
-const int MAX_BOUNCES = 30;
-const int RAYS_PER_PIXEL = 500;
 
 // layout(std140)
 layout(std140) uniform sphereBuffer 
@@ -185,6 +190,7 @@ vec3 traceRay(Ray ray, inout uint rngState)
 
 }
 
+
 void main() 
 {
 
@@ -192,30 +198,25 @@ void main()
     uint numPixels = screenWidth * screenHeight;
     vec4 pxCoord = gl_FragCoord;
     uint pxId = uint(pxCoord.x * screenWidth * screenHeight) + uint(pxCoord.y * screenHeight);
-    uint rngState = pxId; //* uint(time * 1000000);
+    uint rngState = pxId + frameNumber;
+
 
     // calculate the camere bits
-    vec3 viewPointLocal = (vec3(fragPosition.xy / 2, 1) * ViewParams);
+    vec3 viewPointLocal = (vec3(fragPosition.xy / 2.0, 1) * ViewParams);
     vec3 viewPoint = (CamLocalToWorldMatrix * vec4(viewPointLocal.xyz, 1.0)).xyz;
 
-
+    // Btw we can just interpolate the ray direction from the vertex shader.
     Ray ray;
     ray.origin = CamGlobalPos;
     ray.dir = normalize(viewPoint - ray.origin);
 
-
     HitInfo hit = calculateRayCollision(ray);
 
-    if (hit.didHit) 
-    {
-        color = vec4(1.0);
-    }
+    // if (hit.didHit) 
+    // {
+    //     color = vec4(1.0);
+    // }
 
-    // color = vec4(randomDirectionHemisphere(hit.normal, rngState), 1.0);
-    // color = vec4(
-    //     randomDirectionHemisphere(vec3(0,0,1), rngState),
-    //     1.0
-    // );
 
     vec3 totalIncomingLight = vec3(0.0, 0.0, 0.0);
     for (int i = 0; i < RAYS_PER_PIXEL; i++)
@@ -223,10 +224,23 @@ void main()
         totalIncomingLight += traceRay(ray, rngState);
     }
 
-    color = vec4(totalIncomingLight, 1.0);
+    totalIncomingLight /= RAYS_PER_PIXEL;
 
 
+    if (STATIC_RENDER)
+    {
+        float weight = 1.0 / (float(frameNumber) + 2);
+        color = 
+        texture(previousFrame, (fragPosition.xy + 1.0) / 2) * (1-weight) + 
+        vec4(totalIncomingLight, 1.0) * weight;
+    }
+    else 
+    {
+        color = vec4(totalIncomingLight, 1.0);
+    }
 
+
+    
 }
 
 
