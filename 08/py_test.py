@@ -12,6 +12,8 @@ from pathlib import Path
 
 import struct
 
+import pyrr
+
 from pyrr import Vector3, Matrix44, Vector4
 
 from typing import Protocol
@@ -102,12 +104,28 @@ class Triangle(ByteableObject):
         self.posA = posA
         self.posB = posB
         self.posC = posC
-        # self.normalA = normalA
-        # self.normalB = normalB
-        # self.normalC = normalC
+        # lets just make the normals the basic way
+        self.normalA: Vector3 = self.normal
+        self.normalB: Vector3 = self.normal
+        self.normalC: Vector3 = self.normal
+
+    @property
+    def normal(self):
+        edge_ab = self.posB - self.posA
+        edge_ac = self.posC - self.posA
+        return edge_ab.cross(edge_ac)
 
     def tobytes(self) -> bytes | bytearray:
-        return struct.pack("3f 3f 3f", *self.posA, *self.posB, *self.posC)
+        # return struct.pack("3f 3f 3f", *self.posA, *self.posB, *self.posC)
+        return struct.pack(
+            "3f 3f 3f 3f 3f 3f",
+            *self.posA,
+            *self.posB,
+            *self.posC,
+            *self.normalA,
+            *self.normalB,
+            *self.normalC,
+        )
 
 
 class Material(ByteableObject):
@@ -310,9 +328,9 @@ spheres = [
 
 triangles = [
     Triangle(
-        posA=Vector3((-3, -2, 10)),
-        posB=Vector3((+3, 2, 11)),
-        posC=Vector3((0, +5, 12)),
+        Vector3((1, -1, 10)),
+        Vector3((-1, -1, 10)),
+        Vector3((0, 1, 10)),
     )
 ]
 
@@ -325,10 +343,15 @@ vao = ctx.vertex_array(
     ],
 )
 
+program["STATIC_RENDER"].value = STATIC_RENDER
+
+program["MAX_BOUNCES"].write(struct.pack("i", 6))
+program["RAYS_PER_PIXEL"].write(struct.pack("i", 128))
+
 texture = ctx.texture((w, h), 3)
 texture.use(location=1)
 # program["previousFrame"] = 1
-# render_data = b"\x00" * w * h * 3
+render_data = b"\x00" * w * h * 3
 
 # initialise the uniforms
 program["screenWidth"].write(struct.pack("i", w))
@@ -336,12 +359,8 @@ program["screenHeight"].write(struct.pack("i", h))
 
 program["ViewParams"].write(cam.view_params.astype("f4"))
 
-# program["CamLocalToWorldMatrix"].write(cam.local_to_world_matrix.astype("f4"))
-# program["CamGlobalPos"].write(cam.pos.astype("f4"))
-
 program["spheresCount"].write(struct.pack("i", len(spheres)))
-# sphere_buffer_binding = 1
-# program["sphereBuffer"].binding = sphere_buffer_binding
+sphere_buffer_binding = 1
 
 # program["triCount"].write(struct.pack("i", len(triangles)))
 # tri_buffer_binding = 2
@@ -350,16 +369,6 @@ program["spheresCount"].write(struct.pack("i", len(spheres)))
 frame_counter = 1
 running = True
 
-program["MAX_BOUNCES"].write(struct.pack("i", 6))
-program["RAYS_PER_PIXEL"].write(struct.pack("i", 128))
-
-if STATIC_RENDER:
-    # program["STATIC_RENDER"].write(struct.pack("?", STATIC_RENDER))
-    # program["STATIC_RENDER"].value = STATIC_RENDER
-    pass
-else:
-    # program["TOTAL_CYCLES"].write(struct.pack("I", 300))
-    pass
 
 try:
     while running:
@@ -393,14 +402,13 @@ try:
         sphere_bytes = iter_to_bytes(spheres)
         sphere_bytes += b"\x00" * (16 - len(sphere_bytes) % 16)
         sphere_buffer = ctx.buffer(sphere_bytes)
-        sphere_buffer_binding = 1
         sphere_buffer.bind_to_uniform_block(sphere_buffer_binding)
 
-        tri_bytes = iter_to_bytes(triangles)
-        tri_bytes += b"\x00" * (16 - len(tri_bytes) % 16)
-        tri_buffer = ctx.buffer(tri_bytes)
-        tri_buffer_binding = 2
-        tri_buffer.bind_to_uniform_block(tri_buffer_binding)
+        # tri_bytes = iter_to_bytes(triangles)
+        # tri_bytes += b"\x00" * (16 - len(tri_bytes) % 16)
+        # tri_buffer = ctx.buffer(tri_bytes)
+        # tri_buffer_binding = 2
+        # tri_buffer.bind_to_uniform_block(tri_buffer_binding)
 
         vao.render(mode=moderngl.TRIANGLE_STRIP)
 
