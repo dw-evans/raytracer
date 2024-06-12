@@ -89,6 +89,27 @@ class Sphere(ByteableObject):
         return struct.pack("3f f", *self.pos, self.radius) + self.material.tobytes()
 
 
+class Triangle(ByteableObject):
+    def __init__(
+        self,
+        posA: Vector3,
+        posB: Vector3,
+        posC: Vector3,
+        # normalA: Vector3,
+        # normalB: Vector3,
+        # normalC: Vector3,
+    ) -> None:
+        self.posA = posA
+        self.posB = posB
+        self.posC = posC
+        # self.normalA = normalA
+        # self.normalB = normalB
+        # self.normalC = normalC
+
+    def tobytes(self) -> bytes | bytearray:
+        return struct.pack("3f 3f 3f", *self.posA, *self.posB, *self.posC)
+
+
 class Material(ByteableObject):
 
     def __init__(
@@ -164,7 +185,7 @@ class Camera:
                 pass
 
 
-STATIC_RENDER = False
+STATIC_RENDER = True
 
 cam = Camera()
 
@@ -287,6 +308,14 @@ spheres = [
     # ),
 ]
 
+triangles = [
+    Triangle(
+        posA=Vector3((-3, -2, 10)),
+        posB=Vector3((+3, 2, 11)),
+        posC=Vector3((0, +5, 12)),
+    )
+]
+
 buffer1 = ctx.buffer(vertices.tobytes())
 
 vao = ctx.vertex_array(
@@ -298,7 +327,7 @@ vao = ctx.vertex_array(
 
 texture = ctx.texture((w, h), 3)
 texture.use(location=1)
-program["previousFrame"] = 1
+# program["previousFrame"] = 1
 # render_data = b"\x00" * w * h * 3
 
 # initialise the uniforms
@@ -311,8 +340,12 @@ program["ViewParams"].write(cam.view_params.astype("f4"))
 # program["CamGlobalPos"].write(cam.pos.astype("f4"))
 
 program["spheresCount"].write(struct.pack("i", len(spheres)))
-sphere_buffer_binding = 1
-program["sphereBuffer"].binding = sphere_buffer_binding
+# sphere_buffer_binding = 1
+# program["sphereBuffer"].binding = sphere_buffer_binding
+
+# program["triCount"].write(struct.pack("i", len(triangles)))
+# tri_buffer_binding = 2
+# program["triBuffer"].binding = tri_buffer_binding
 
 frame_counter = 1
 running = True
@@ -322,7 +355,8 @@ program["RAYS_PER_PIXEL"].write(struct.pack("i", 128))
 
 if STATIC_RENDER:
     # program["STATIC_RENDER"].write(struct.pack("?", STATIC_RENDER))
-    program["STATIC_RENDER"].value = STATIC_RENDER
+    # program["STATIC_RENDER"].value = STATIC_RENDER
+    pass
 else:
     # program["TOTAL_CYCLES"].write(struct.pack("I", 300))
     pass
@@ -336,6 +370,8 @@ try:
                 sys.exit()
 
         time = pygame.time.get_ticks() / np.float32(1000.0)
+        if STATIC_RENDER:
+            time = 0
 
         program["frameNumber"].write(struct.pack("I", frame_counter))
 
@@ -354,13 +390,17 @@ try:
         program["CamLocalToWorldMatrix"].write(cam.local_to_world_matrix.astype("f4"))
         program["CamGlobalPos"].write(cam.pos.astype("f4"))
 
-        # sphere_bytes = struct.pack("<i", len(spheres))
         sphere_bytes = iter_to_bytes(spheres)
         sphere_bytes += b"\x00" * (16 - len(sphere_bytes) % 16)
-
         sphere_buffer = ctx.buffer(sphere_bytes)
         sphere_buffer_binding = 1
         sphere_buffer.bind_to_uniform_block(sphere_buffer_binding)
+
+        tri_bytes = iter_to_bytes(triangles)
+        tri_bytes += b"\x00" * (16 - len(tri_bytes) % 16)
+        tri_buffer = ctx.buffer(tri_bytes)
+        tri_buffer_binding = 2
+        tri_buffer.bind_to_uniform_block(tri_buffer_binding)
 
         vao.render(mode=moderngl.TRIANGLE_STRIP)
 

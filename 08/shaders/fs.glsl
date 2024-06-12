@@ -13,12 +13,14 @@ uniform vec3 CamGlobalPos;
 uniform float time;
 
 const int SPHERES_COUNT_MAX = 256;
+const int TRIANGLES_COUNT_MAX = 256;
 float inf = 1.0 / 0.0;
 float pi = 3.14159265359;
 uniform int MAX_BOUNCES;
 uniform int RAYS_PER_PIXEL;
 
 uniform int spheresCount;
+// uniform int triCount;
 
 uniform sampler2D previousFrame;
 
@@ -48,6 +50,23 @@ layout(std140) uniform sphereBuffer
     // int spheresCount; // I cannot figure out how to get this to work
     Sphere spheres[SPHERES_COUNT_MAX];
 };
+
+
+struct Triangle
+{
+    vec3 posA;
+    vec3 posB;
+    vec3 posC;
+};
+
+
+layout(std140) uniform triBuffer 
+{
+    // int spheresCount; // I cannot figure out how to get this to work
+    Triangle triangles[SPHERES_COUNT_MAX];
+};
+
+
 
 struct Ray 
 {
@@ -159,6 +178,39 @@ vec3 randomDirectionHemisphere(vec3 normal, inout uint rngState)
 }
 
 
+HitInfo rayTriangle(Ray ray, Triangle tri)
+{
+    // nabbed this function directly from Sebastian Lague's video
+
+    vec3 edgeAB = tri.posB - tri.posA;
+    vec3 edgeAC = tri.posC - tri.posA;
+    vec3 normalVector = cross(edgeAB, edgeAC);
+    vec3 ao = ray.origin - tri.posA;
+    vec3 dao = cross(ao, ray.dir);
+
+    float determinant = -dot(ray.dir, normalVector);
+    float invDet = 1 / determinant;
+    
+    // I have removed this since I don't see why it is necessary for low poly objects
+
+    // Calculate dst to triangle & barycentric coordinates of intersection point
+    float dst = dot(ao, normalVector) * invDet;
+    float u = dot(edgeAC, dao) * invDet;
+    float v = -dot(edgeAB, dao) * invDet;
+    float w = 1 - u - v;
+    
+    // Initialize hit info
+    HitInfo hitInfo;
+    hitInfo.didHit = determinant >= 1E-6 && dst >= 0 && u >= 0 && v >= 0 && w >= 0;
+    hitInfo.hitPoint = ray.origin + ray.dir * dst;
+
+    // hitInfo.normal = normalize(tri.normalA * w + tri.normalB * u + tri.normalC * v);
+    hitInfo.normal = normalVector;
+    hitInfo.dst = dst;
+    return hitInfo;
+}
+
+
 vec3 traceRay(Ray ray, inout uint rngState)
 {
 
@@ -171,7 +223,9 @@ vec3 traceRay(Ray ray, inout uint rngState)
         if (hitInfo.didHit)
         {
             ray.origin = hitInfo.hitPoint;
-            ray.dir = randomDirectionHemisphere(hitInfo.normal, rngState);
+            // ray.dir = randomDirectionHemisphere(hitInfo.normal, rngState);
+            // why on earth does this work?
+            ray.dir = normalize(hitInfo.normal + randomDirection(rngState));
             
             Material material = hitInfo.sphere.material;
 
@@ -200,7 +254,6 @@ void main()
     uint pxId = uint(pxCoord.x * screenWidth * screenHeight) + uint(pxCoord.y * screenHeight);
     uint rngState = pxId + frameNumber;
 
-
     // calculate the camere bits
     vec3 viewPointLocal = (vec3(fragPosition.xy / 2.0, 1) * ViewParams);
     vec3 viewPoint = (CamLocalToWorldMatrix * vec4(viewPointLocal.xyz, 1.0)).xyz;
@@ -216,7 +269,6 @@ void main()
     // {
     //     color = vec4(1.0);
     // }
-
 
     vec3 totalIncomingLight = vec3(0.0, 0.0, 0.0);
     for (int i = 0; i < RAYS_PER_PIXEL; i++)
@@ -238,6 +290,13 @@ void main()
     {
         color = vec4(totalIncomingLight, 1.0);
     }
+
+
+    Triangle tri = triangles[0];
+
+    HitInfo hit2 = rayTriangle(ray, tri);
+
+    color = vec4(hit2.didHit);
 
 
     
