@@ -118,6 +118,7 @@ class Triangle(ByteableObject):
     def tobytes(self) -> bytes | bytearray:
         # return struct.pack("3f 3f 3f", *self.posA, *self.posB, *self.posC)
         return struct.pack(
+            # "3f 3f 3f",
             "3f 3f 3f 3f 3f 3f",
             *self.posA,
             *self.posB,
@@ -203,7 +204,7 @@ class Camera:
                 pass
 
 
-STATIC_RENDER = True
+STATIC_RENDER = False
 
 cam = Camera()
 
@@ -328,11 +329,32 @@ spheres = [
 
 triangles = [
     Triangle(
-        Vector3((1, -1, 10)),
-        Vector3((-1, -1, 10)),
-        Vector3((0, 1, 10)),
+        Vector3((0.0, 0.0, 9.0)),
+        Vector3((0.0, 0.0, 11.0)),
+        Vector3((0.0, 1.0, 10.0)),
     )
 ]
+
+
+sp1, sp2, sp3 = [
+    Sphere(
+        pos=triangles[0].posA,
+        radius=0.1,
+        material=material1,
+    ),
+    Sphere(
+        pos=triangles[0].posB,
+        radius=0.1,
+        material=material1,
+    ),
+    Sphere(
+        pos=triangles[0].posC,
+        radius=0.1,
+        material=material1,
+    ),
+]
+
+spheres += [sp1, sp2, sp3]
 
 buffer1 = ctx.buffer(vertices.tobytes())
 
@@ -343,32 +365,36 @@ vao = ctx.vertex_array(
     ],
 )
 
-program["STATIC_RENDER"].value = STATIC_RENDER
+
+# def try_assign_program
+
+
+# program["STATIC_RENDER"].value = STATIC_RENDER
+program["STATIC_RENDER"].write(struct.pack("i", STATIC_RENDER))
 
 program["MAX_BOUNCES"].write(struct.pack("i", 6))
 program["RAYS_PER_PIXEL"].write(struct.pack("i", 128))
 
 texture = ctx.texture((w, h), 3)
 texture.use(location=1)
-# program["previousFrame"] = 1
+program["previousFrame"] = 1
 render_data = b"\x00" * w * h * 3
 
 # initialise the uniforms
 program["screenWidth"].write(struct.pack("i", w))
 program["screenHeight"].write(struct.pack("i", h))
 
-program["ViewParams"].write(cam.view_params.astype("f4"))
 
 program["spheresCount"].write(struct.pack("i", len(spheres)))
 sphere_buffer_binding = 1
+program["sphereBuffer"].binding = sphere_buffer_binding
 
 # program["triCount"].write(struct.pack("i", len(triangles)))
-# tri_buffer_binding = 2
-# program["triBuffer"].binding = tri_buffer_binding
+tri_buffer_binding = 2
+program["triBuffer"].binding = tri_buffer_binding
 
 frame_counter = 1
 running = True
-
 
 try:
     while running:
@@ -384,18 +410,28 @@ try:
 
         program["frameNumber"].write(struct.pack("I", frame_counter))
 
-        spheres[4].pos.x = 2 * sin(time * 2.1)
-        spheres[4].pos.y = 5 + 3 * cos(time * 1.9)
-        spheres[4].pos.z = 8 + 5 * cos(time * 1.1)
+        # spheres[4].pos.x = 2 * sin(time * 2.1)
+        # spheres[4].pos.y = 5 + 3 * cos(time * 1.9)
+        # spheres[4].pos.z = 8 + 5 * cos(time * 1.1)
 
-        # spheres[1].pos.x = 1.5 * sin(time * 2)
-        # spheres[1].pos.y = 0.5 * cos(time * 6)
-        # spheres[1].pos.z = 12 + 8 * cos(time * 1)
+        spheres[1].pos.x = 1.5 * sin(time * 2)
+        spheres[1].pos.y = 0.5 * cos(time * 6)
+        spheres[1].pos.z = 16 + 0.5 * cos(time * 1)
 
-        cam.yaw = 15 * sin(time / 4)
-        cam.pitch = 3 * sin(time / 15)
-        cam.roll = 6 * sin(time / 8)
+        # cam.yaw = 15 * sin(time / 4)
+        # cam.pitch = 3 * sin(time / 15)
+        # cam.roll = 6 * sin(time / 8)
 
+        triangles[0].posA.x = 2.0 + 1 * sin(time / 3)
+        triangles[0].posB.x = -2.0 + 1 * sin(time / 7)
+        triangles[0].posC.x = -0.0 + 1 * sin(time / 5)
+
+        # sp1.pos = triangles[0].posA
+        # sp2.pos = triangles[0].posB
+        # sp3.pos = triangles[0].posC
+        cam.pos.z = 0.0 + 0.5 * sin(time / 8)
+
+        program["ViewParams"].write(cam.view_params.astype("f4"))
         program["CamLocalToWorldMatrix"].write(cam.local_to_world_matrix.astype("f4"))
         program["CamGlobalPos"].write(cam.pos.astype("f4"))
 
@@ -404,11 +440,10 @@ try:
         sphere_buffer = ctx.buffer(sphere_bytes)
         sphere_buffer.bind_to_uniform_block(sphere_buffer_binding)
 
-        # tri_bytes = iter_to_bytes(triangles)
-        # tri_bytes += b"\x00" * (16 - len(tri_bytes) % 16)
-        # tri_buffer = ctx.buffer(tri_bytes)
-        # tri_buffer_binding = 2
-        # tri_buffer.bind_to_uniform_block(tri_buffer_binding)
+        tri_bytes = iter_to_bytes(triangles)
+        tri_bytes += b"\x00" * (16 - len(tri_bytes) % 16)
+        tri_buffer = ctx.buffer(tri_bytes)
+        tri_buffer.bind_to_uniform_block(tri_buffer_binding)
 
         vao.render(mode=moderngl.TRIANGLE_STRIP)
 

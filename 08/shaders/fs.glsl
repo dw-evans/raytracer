@@ -13,7 +13,7 @@ uniform vec3 CamGlobalPos;
 uniform float time;
 
 const int SPHERES_COUNT_MAX = 256;
-// const int TRIANGLES_COUNT_MAX = 256;
+const int TRIANGLES_COUNT_MAX = 256;
 float inf = 1.0 / 0.0;
 float pi = 3.14159265359;
 uniform int MAX_BOUNCES;
@@ -49,21 +49,21 @@ layout(std140) uniform sphereBuffer
     Sphere spheres[SPHERES_COUNT_MAX];
 };
 
-// struct Triangle
-// {
-//     vec3 posA;
-//     vec3 posB;
-//     vec3 posC;
-//     vec3 normalA;
-//     vec3 normalB;
-//     vec3 normalC;
-// };
+struct Triangle
+{
+    vec3 posA;
+    vec3 posB;
+    vec3 posC;
+    vec3 normalA;
+    vec3 normalB;
+    vec3 normalC;
+};
 
-// layout(std140) uniform triBuffer 
-// {
-//     // int spheresCount; // I cannot figure out how to get this to work
-//     Triangle triangles[SPHERES_COUNT_MAX];
-// };
+layout(std140) uniform triBuffer 
+{
+    // int spheresCount; // I cannot figure out how to get this to work
+    Triangle triangles[10];
+};
 
 struct Ray 
 {
@@ -77,9 +77,10 @@ struct HitInfo
     float dst;
     vec3 hitPoint;
     vec3 normal;
-    Sphere sphere;
-    // Material material;
+    // Sphere sphere;
+    Material material;
 };
+
 
 HitInfo defaultHitInfo() {
     HitInfo hitInfo;
@@ -119,8 +120,8 @@ HitInfo raySphere(Ray ray, vec3 spherePos, float sphereRadius)
 }
 
 HitInfo calculateRayCollision(Ray ray)
-// calculates the ray collisions for all 
 {
+    // calculates the ray collisions for all 
     HitInfo closestHit = defaultHitInfo();
 
     closestHit.dst = inf;
@@ -138,8 +139,8 @@ HitInfo calculateRayCollision(Ray ray)
         if (hitInfo.didHit && hitInfo.dst < closestHit.dst)
         {
             closestHit = hitInfo;
-            // closestHit.sphere.material = sphere.material;
-            closestHit.sphere = sphere;
+            closestHit.material = sphere.material;
+            // closestHit.sphere = sphere;
         }
     }
     // todo: loop over all triangles in the scene
@@ -155,8 +156,8 @@ float randomValue(inout uint state)
 }
 
 vec3 randomDirection(inout uint rngState) 
-// calculates a random vector in a sphere
 {
+    // calculates a random vector in a sphere
     float u = randomValue(rngState);
     float v = randomValue(rngState);
 
@@ -176,120 +177,114 @@ vec3 randomDirectionHemisphere(vec3 normal, inout uint rngState)
     return sign(dot(randomDir, normal)) * randomDir;
 }
 
-// struct Triangle2 
-// {
-//     vec3 v0;
-//     vec3 v1;
-//     vec3 v2;
-// };
 
-// Triangle2 myTriangle = Triangle2(
-//     vec3(1, -1, 0),
-//     vec3(-1, -1, 0),
-//     vec3(0, 1, 0)
-// );
 
 // I am reading somethign wile about needing to flip the camera if triangles are modelled in a CW arrangement
 // because this reverses the normals. Not sure how ti changes the position of the triangle...
 
 // https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution.html
 
-// HitInfo rayTriangle2(Ray ray, Triangle2 tri)
-// {
+HitInfo rayTriangle2(Ray ray, Triangle tri)
+{
+    HitInfo hitInfo = defaultHitInfo();
 
-//     HitInfo hitInfo = defaultHitInfo();
-
-//     // edges
-//     vec3 edgeAB = tri.v1 - tri.v0;
-//     vec3 edgeAC = tri.v2 - tri.v0;
-//     vec3 edgeBC = tri.v2 - tri.v1;
-//     // normal
-//     vec3 crossproduct = cross(edgeAB, edgeAC); // the not-normalized normal
+    // edges
+    vec3 edgeAB = tri.posB - tri.posA;
+    vec3 edgeAC = tri.posC - tri.posA;
+    vec3 edgeBC = tri.posC - tri.posB;
+    // normal
+    vec3 crossproduct = cross(edgeAB, edgeAC); // the not-normalized normal
     
-//     // the normal vector (normalized)
-//     vec3 N = normalize(crossproduct);
+    // the normal vector (normalized)
+    vec3 N = normalize(crossproduct);
 
-//     // solving the last part of teh plane equation
-//     float D = -dot(N, tri.v0);
-
-
-//     // but what if the ray and triangle are parallel
-//     // dot product of direction and normal vector is close to zero
+    // solving the last part of teh plane equation
+    float D = -dot(N, tri.posA);
 
 
-//     // check if the ray is parallel
-//     float parallelCheck = dot(N, ray.dir);
-//     // if the ray is parallel, there is no intersection therefore no hit.
-//     if (abs(parallelCheck) <= 1e-6)
-//     {
-//         hitInfo.didHit = false;
-//         return hitInfo;
-//     }
+    // but what if the ray and triangle are parallel
+    // dot product of direction and normal vector is close to zero
 
-//     // the ray distance travelled to the intersection
-//     float t = -(dot(N, ray.origin) + D) / dot(N, ray.dir);
+
+    // check if the ray is parallel
+    float parallelCheck = dot(N, ray.dir);
+    // if the ray is parallel, there is no intersection therefore no hit.
+    if (abs(parallelCheck) <= 1e-6)
+    {
+        hitInfo.didHit = false;
+        return hitInfo;
+    }
+
+    // the ray distance travelled to the intersection
+    float t = -(dot(N, ray.origin) + D) / dot(N, ray.dir);
+
+    if (t < 0.0)
+    {
+        hitInfo.didHit = false;
+        return hitInfo; 
+    }
     
-//     // the position of the hit
-//     vec3 phit = ray.origin * t * ray.dir;
+    // the position of the hit
+    vec3 phit = ray.origin * t * ray.dir;
 
-//     // check if the phit is within the triangle, we have only checked intersection with the plane
-//     vec3 C0 = phit - tri.v0;
-//     vec3 C1 = phit - tri.v1;
-//     vec3 C2 = phit - tri.v2;
+    // check if the phit is within the triangle, we have only checked intersection with the plane
+    vec3 C0 = phit - tri.posA;
+    vec3 C1 = phit - tri.posB;
+    vec3 C2 = phit - tri.posC;
 
-//     bool insideOutsideCheck = (
-//         dot(N, cross(edgeAB, C0)) > 0.0 &&
-//         dot(N, cross(edgeAC, C1)) > 0.0 &&
-//         dot(N, cross(edgeBC, C2)) > 0.0 
-//     );
+    bool insideCheck = (
+        dot(N, cross(edgeAB, C0)) > 0.0 &&
+        dot(N, cross(edgeAC, C1)) > 0.0 &&
+        dot(N, cross(edgeBC, C2)) > 0.0 
+    );
 
-//     if (insideOutsideCheck)
-//     {
-//         hitInfo.didHit = true;
-//         hitInfo.dst = t;
-//         hitInfo.hitPoint = phit;
-//         hitInfo.normal = N;
-//     } else
-//     {
-//         hitInfo.didHit = false;
-//     }
+    if (!insideCheck)
+    {
+        hitInfo.didHit = false;
+        return hitInfo;
+    }
 
-//     return hitInfo;
+    hitInfo.didHit = true;
+    hitInfo.dst = t;
+    hitInfo.hitPoint = phit;
+    hitInfo.normal = N;
 
-// }
+    return hitInfo;
+
+}
 
 
-// HitInfo rayTriangle(Ray ray, Triangle tri)
-// {
-//     // nabbed this function directly from Sebastian Lague's video
+HitInfo rayTriangle(Ray ray, Triangle tri)
+{
+    // nabbed this function directly from Sebastian Lague's video
 
-//     vec3 edgeAB = tri.posB - tri.posA;
-//     vec3 edgeAC = tri.posC - tri.posA;
-//     vec3 normalVector = cross(edgeAB, edgeAC);
-//     vec3 ao = ray.origin - tri.posA;
-//     vec3 dao = cross(ao, ray.dir);
+    vec3 edgeAB = tri.posB - tri.posA;
+    vec3 edgeAC = tri.posC - tri.posA;
+    vec3 normalVector = cross(edgeAB, edgeAC);
+    vec3 ao = ray.origin - tri.posA;
+    vec3 dao = cross(ao, ray.dir);
 
-//     float determinant = -dot(ray.dir, normalVector);
-//     float invDet = 1 / determinant;
+    float determinant = -dot(ray.dir, normalVector);
+    float invDet = 1 / determinant;
     
-//     // I would like to remove this since I don't see why it is necessary for low poly objects
+    // I would like to remove this since I don't see why it is necessary for low poly objects
 
-//     // Calculate dst to triangle & barycentric coordinates of intersection point
-//     float dst = dot(ao, normalVector) * invDet;
-//     float u = dot(edgeAC, dao) * invDet;
-//     float v = -dot(edgeAB, dao) * invDet;
-//     float w = 1 - u - v;
+    // Calculate dst to triangle & barycentric coordinates of intersection point
+    float dst = dot(ao, normalVector) * invDet;
+    float u = dot(edgeAC, dao) * invDet;
+    float v = -dot(edgeAB, dao) * invDet;
+    float w = 1 - u - v;
     
-//     // Initialize hit info
-//     HitInfo hitInfo;
-//     hitInfo.didHit = determinant >= 1E-6 && dst >= 0 && u >= 0 && v >= 0 && w >= 0;
-//     hitInfo.hitPoint = ray.origin + ray.dir * dst;
+    // Initialize hit info
+    HitInfo hitInfo;
+    hitInfo.didHit = determinant >= 1E-6 && dst >= 0 && u >= 0 && v >= 0 && w >= 0;
+    hitInfo.hitPoint = ray.origin + ray.dir * dst;
 
-//     // hitInfo.normal = normalize(tri.normalA * w + tri.normalB * u + tri.normalC * v);
-//     hitInfo.normal = normalVector;
-//     hitInfo.dst = dst;
-//     return hitInfo;
-// }
+    // hitInfo.normal = normalize(tri.normalA * w + tri.normalB * u + tri.normalC * v);
+    hitInfo.normal = normalize(normalVector);
+    hitInfo.dst = dst;
+    return hitInfo;
+}
 
 vec3 traceRay(Ray ray, inout uint rngState)
 {
@@ -308,7 +303,7 @@ vec3 traceRay(Ray ray, inout uint rngState)
             ray.dir = normalize(hitInfo.normal + randomDirection(rngState));
             
             // Material material = hitInfo.material;
-            Material material = hitInfo.sphere.material;
+            Material material = hitInfo.material;
 
             vec3 emittedLight = material.emissionColor * material.emissionStrength;
 
@@ -346,13 +341,6 @@ void main()
 
     HitInfo hit = calculateRayCollision(ray);
 
-    // if (hit.didHit) 
-    // {
-    //     color = vec4(1.0);
-    // }
-
-    color = vec4(0.5);
-
     vec3 totalIncomingLight = vec3(0.0, 0.0, 0.0);
     for (int i = 0; i < RAYS_PER_PIXEL; i++)
     {
@@ -362,17 +350,42 @@ void main()
     totalIncomingLight /= RAYS_PER_PIXEL;
 
 
+    Triangle myTriangle = Triangle(
+        vec3(1, -1, 100),
+        vec3(-1, -1, 100),
+        vec3(0, 1, 104),
+        vec3(0.0, 0.0, -1.0),
+        vec3(0.0, 0.0, -1.0),
+        vec3(0.0, 0.0, -1.0)
+    );
+
+    myTriangle = triangles[0];
+
+    // HitInfo hit2 = rayTriangle2(ray, myTriangl2e);
+    // the normal seems to work, but the hit info is not correctly detecting hits
+    // HitInfo hit2 = rayTriangle(ray, myTriangle);
+    HitInfo hit2 = rayTriangle2(ray, myTriangle);
+
     if (STATIC_RENDER)
     {
         float weight = 1.0 / (float(frameNumber) + 2);
         color = 
-        texture(previousFrame, (fragPosition.xy + 1.0) / 2) * (1-weight) + 
-        vec4(totalIncomingLight, 1.0) * weight;
+        // texture(previousFrame, (fragPosition.xy + 1.0) / 2) * (1-weight) + 
+        // vec4(totalIncomingLight, 1.0) * weight;
+
+        texture(previousFrame, (fragPosition.xy + 1.0) / 2) * 0.01 +
+        vec4(totalIncomingLight, 1.0) * 0.01 +
+        vec4(normalize(abs(hit2.normal)), 1.0);
     }
     else 
     {
         color = vec4(totalIncomingLight, 1.0);
+        color = vec4(totalIncomingLight, 1.0) * 0.5 +
+        vec4(normalize(abs(hit2.normal)), 1.0) * 0.5;
     }
+
+    // HitInfo hit2 = rayTriangle2(ray, myTriangle);
+    // color = vec4(hit2.didHit);
 
 
     // Triangle tri = triangles[0];
