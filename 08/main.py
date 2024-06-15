@@ -151,6 +151,7 @@ class Material(ByteableObject):
         # )
 
 
+
 class Camera:
     def __init__(self) -> None:
         self.fov = 30.0  # degrees
