@@ -20,7 +20,7 @@ uniform int MAX_BOUNCES;
 uniform int RAYS_PER_PIXEL;
 
 uniform int spheresCount;
-// uniform int triCount;
+uniform int triCount;
 
 uniform sampler2D previousFrame;
 
@@ -57,6 +57,7 @@ struct Triangle
     vec3 normalA;
     vec3 normalB;
     vec3 normalC;
+    Material material;
 };
 
 layout(std140) uniform triBuffer 
@@ -119,72 +120,7 @@ HitInfo raySphere(Ray ray, vec3 spherePos, float sphereRadius)
     return hitInfo;
 }
 
-HitInfo calculateRayCollision(Ray ray)
-{
-    // calculates the ray collisions for all 
-    HitInfo closestHit = defaultHitInfo();
-
-    closestHit.dst = inf;
-
-    // loop over all spheres in the scene
-    for (int i = 0; i < spheresCount; i++)
-    {
-        Sphere sphere = spheres[i];
-        HitInfo hitInfo = raySphere(
-            ray,
-            sphere.position,
-            sphere.radius
-        );
-
-        if (hitInfo.didHit && hitInfo.dst < closestHit.dst)
-        {
-            closestHit = hitInfo;
-            closestHit.material = sphere.material;
-            // closestHit.sphere = sphere;
-        }
-    }
-    // todo: loop over all triangles in the scene
-    // ...
-
-    return closestHit;
-}
-
-float randomValue(inout uint state) 
-{
-    state *= (state + uint(195439)) * (state + uint(124395)) * (state + uint(845921));
-    return state / 4294967295.0;
-}
-
-vec3 randomDirection(inout uint rngState) 
-{
-    // calculates a random vector in a sphere
-    float u = randomValue(rngState);
-    float v = randomValue(rngState);
-
-    float theta = 2.0 * pi * u;
-    float phi = acos(2.0 * v - 1.0);
-
-    return vec3(
-        sin(phi) * cos(theta),
-        sin(phi) * sin(theta),
-        cos(phi)
-    );
-}
-vec3 randomDirectionHemisphere(vec3 normal, inout uint rngState) 
-{
-    vec3 randomDir = randomDirection(rngState);
-    // return normal;
-    return sign(dot(randomDir, normal)) * randomDir;
-}
-
-
-
-// I am reading somethign wile about needing to flip the camera if triangles are modelled in a CW arrangement
-// because this reverses the normals. Not sure how ti changes the position of the triangle...
-
-// https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution.html
-
-HitInfo rayTriangle2(Ray ray, Triangle tri)
+HitInfo rayTriangle(Ray ray, Triangle tri)
 {
     HitInfo hitInfo = defaultHitInfo();
 
@@ -251,43 +187,91 @@ HitInfo rayTriangle2(Ray ray, Triangle tri)
 
     hitInfo.normal = tri.normalA;
     hitInfo.didHit = true;
+    hitInfo.material = tri.material;
 
     return hitInfo;
 
 }
 
 
-HitInfo rayTriangle(Ray ray, Triangle tri)
+HitInfo calculateRayCollision(Ray ray)
 {
-    // nabbed this function directly from Sebastian Lague's video
+    // calculates the ray collisions for all 
+    HitInfo closestHit = defaultHitInfo();
 
-    vec3 edgeAB = tri.posB - tri.posA;
-    vec3 edgeAC = tri.posC - tri.posA;
-    vec3 normalVector = cross(edgeAB, edgeAC);
-    vec3 ao = ray.origin - tri.posA;
-    vec3 dao = cross(ao, ray.dir);
+    closestHit.dst = inf;
 
-    float determinant = -dot(ray.dir, normalVector);
-    float invDet = 1 / determinant;
-    
-    // I would like to remove this since I don't see why it is necessary for low poly objects
+    // loop over all spheres in the scene
+    for (int i = 0; i < spheresCount; i++)
+    {
+        Sphere sphere = spheres[i];
+        HitInfo hitInfo = raySphere(
+            ray,
+            sphere.position,
+            sphere.radius
+        );
 
-    // Calculate dst to triangle & barycentric coordinates of intersection point
-    float dst = dot(ao, normalVector) * invDet;
-    float u = dot(edgeAC, dao) * invDet;
-    float v = -dot(edgeAB, dao) * invDet;
-    float w = 1 - u - v;
-    
-    // Initialize hit info
-    HitInfo hitInfo;
-    hitInfo.didHit = determinant >= 1E-6 && dst >= 0 && u >= 0 && v >= 0 && w >= 0;
-    hitInfo.hitPoint = ray.origin + ray.dir * dst;
+        if (hitInfo.didHit && hitInfo.dst < closestHit.dst)
+        {
+            closestHit = hitInfo;
+            closestHit.material = sphere.material;
+            // closestHit.sphere = sphere;
+        }
+    }
+    // loop over all triangles in the scene
+    for (int i = 0; i < triCount; i++)
+    {
+        Triangle tri = triangles[i];
+        HitInfo hitInfo = rayTriangle(
+            ray,
+            tri
+        );
 
-    // hitInfo.normal = normalize(tri.normalA * w + tri.normalB * u + tri.normalC * v);
-    hitInfo.normal = normalize(normalVector);
-    hitInfo.dst = dst;
-    return hitInfo;
+        if (hitInfo.didHit && hitInfo.dst < closestHit.dst)
+        {
+            closestHit = hitInfo;
+            closestHit.material = tri.material;
+        }
+    }
+
+    return closestHit;
 }
+
+float randomValue(inout uint state) 
+{
+    state *= (state + uint(195439)) * (state + uint(124395)) * (state + uint(845921));
+    return state / 4294967295.0;
+}
+
+vec3 randomDirection(inout uint rngState) 
+{
+    // calculates a random vector in a sphere
+    float u = randomValue(rngState);
+    float v = randomValue(rngState);
+
+    float theta = 2.0 * pi * u;
+    float phi = acos(2.0 * v - 1.0);
+
+    return vec3(
+        sin(phi) * cos(theta),
+        sin(phi) * sin(theta),
+        cos(phi)
+    );
+}
+vec3 randomDirectionHemisphere(vec3 normal, inout uint rngState) 
+{
+    vec3 randomDir = randomDirection(rngState);
+    // return normal;
+    return sign(dot(randomDir, normal)) * randomDir;
+}
+
+
+
+// I am reading somethign wile about needing to flip the camera if triangles are modelled in a CW arrangement
+// because this reverses the normals. Not sure how ti changes the position of the triangle...
+
+// https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution.html
+
 
 vec3 traceRay(Ray ray, inout uint rngState)
 {
@@ -352,12 +336,12 @@ void main()
 
     totalIncomingLight /= RAYS_PER_PIXEL;
 
-    Triangle myTriangle = triangles[0];
+    // Triangle myTriangle = triangles[0];
 
     // HitInfo hit2 = rayTriangle2(ray, myTriangl2e);
     // the normal seems to work, but the hit info is not correctly detecting hits
     // HitInfo hit2 = rayTriangle(ray, myTriangle);
-    HitInfo hit2 = rayTriangle2(ray, myTriangle);
+    // HitInfo hit2 = rayTriangle(ray, myTriangle);
 
     if (STATIC_RENDER)
     {
@@ -366,16 +350,17 @@ void main()
         // texture(previousFrame, (fragPosition.xy + 1.0) / 2) * (1-weight) + 
         // vec4(totalIncomingLight, 1.0) * weight;
 
-        texture(previousFrame, (fragPosition.xy + 1.0) / 2) * 0.01 +
-        vec4(totalIncomingLight, 1.0) * 0.01 +
-        vec4(normalize(abs(hit2.normal)), 1.0);
+        texture(previousFrame, (fragPosition.xy + 1.0) / 2) * 0.01 
+        + vec4(totalIncomingLight, 1.0) * 0.01 
+        // + vec4(normalize(abs(hit2.normal)), 1.0)
+        ;
     }
     else 
     {
         // color = vec4(0.5);
         color = vec4(totalIncomingLight, 1.0) * 0.5
         // + vec4(vec3(hit2.didHit), 1.0) * 0.5
-        + vec4(vec3(hit2.didHit), 1.0) * 0.5
+        // + vec4(hit2.material.color) * 0.5
         ;
     }
 

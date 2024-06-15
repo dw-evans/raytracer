@@ -19,6 +19,9 @@ from pyrr import Vector3, Matrix44, Vector4
 from typing import Protocol
 
 
+# from PIL import Image
+
+
 os.chdir(Path(__file__).parent)
 
 
@@ -97,6 +100,7 @@ class Triangle(ByteableObject):
         posA: Vector3,
         posB: Vector3,
         posC: Vector3,
+        material: Material,
         # normalA: Vector3,
         # normalB: Vector3,
         # normalC: Vector3,
@@ -104,6 +108,7 @@ class Triangle(ByteableObject):
         self.posA = posA
         self.posB = posB
         self.posC = posC
+        self.material = material
         # lets just make the normals the basic way
         # self.normalA: Vector3 = self.normal
         # self.normalB: Vector3 = self.normal
@@ -129,15 +134,18 @@ class Triangle(ByteableObject):
 
     def tobytes(self) -> bytes | bytearray:
         # return struct.pack("3f 3f 3f", *self.posA, *self.posB, *self.posC)
-        return struct.pack(
-            # "3f 3f 3f",
-            "3f4x 3f4x 3f4x 3f4x 3f4x 3f4x",
-            *self.posA,
-            *self.posB,
-            *self.posC,
-            *self.normal,
-            *self.normal,
-            *self.normal,
+        return (
+            struct.pack(
+                # "3f 3f 3f",
+                "3f4x 3f4x 3f4x 3f4x 3f4x 3f4x",
+                *self.posA,
+                *self.posB,
+                *self.posC,
+                *self.normal,
+                *self.normal,
+                *self.normal,
+            )
+            + self.material.tobytes()
         )
 
 
@@ -157,10 +165,6 @@ class Material(ByteableObject):
         return struct.pack(
             "4f 3f f", *self.color, *self.emissionColor, self.emissionStrength
         )
-        # return struct.pack(
-        #     "4f",
-        #     *self.color,
-        # )
 
 
 class Camera:
@@ -216,7 +220,22 @@ class Camera:
                 pass
 
 
+WINDOW_HEIGHT = 1080
+# ASPECT_RATIO = 16.0 / 9.0
+
+MAX_RAY_BOUNCES = 6
+RAYS_PER_PIXEL = 300
+
+
 STATIC_RENDER = False
+
+STATIC_RENDER_FRAMERATE = 24
+STATIC_RENDER_CYCLES_PER_FRAME = 300
+STATIC_RENDER_TOTAL_FRAMES = 24
+
+
+DYNAMIC_RENDER_FRAMERATE = 24
+
 
 cam = Camera()
 
@@ -266,6 +285,7 @@ vertices = np.array(
     ],
     dtype="f4",
 )
+
 
 material1 = Material(
     Vector4((1.0, 1.0, 0.0, 1.0), dtype="f4"),
@@ -327,16 +347,6 @@ spheres = [
         radius=3.0,
         material=material5,
     ),
-    # Sphere(
-    #     pos=Vector3((0.0, 13, 10), dtype="f4"),
-    #     radius=0.8,
-    #     material=material3,
-    # ),
-    # Sphere(
-    #     pos=Vector3((0.0, 7, 10), dtype="f4"),
-    #     radius=0.6,
-    #     material=material2,
-    # ),
 ]
 
 triangles = [
@@ -344,6 +354,7 @@ triangles = [
         Vector3((0.0, 0.0, 9.0), dtype="f4"),
         Vector3((0.0, 0.0, 11.0), dtype="f4"),
         Vector3((0.0, 1.0, 10.0), dtype="f4"),
+        material=material4,
     )
 ]
 
@@ -378,14 +389,11 @@ vao = ctx.vertex_array(
 )
 
 
-# def try_assign_program
-
-
 # program["STATIC_RENDER"].value = STATIC_RENDER
 program["STATIC_RENDER"].write(struct.pack("i", STATIC_RENDER))
 
-program["MAX_BOUNCES"].write(struct.pack("i", 6))
-program["RAYS_PER_PIXEL"].write(struct.pack("i", 128))
+program["MAX_BOUNCES"].write(struct.pack("i", MAX_RAY_BOUNCES))
+program["RAYS_PER_PIXEL"].write(struct.pack("i", RAYS_PER_PIXEL))
 
 texture = ctx.texture((w, h), 3)
 texture.use(location=1)
@@ -401,7 +409,7 @@ program["spheresCount"].write(struct.pack("i", len(spheres)))
 sphere_buffer_binding = 1
 program["sphereBuffer"].binding = sphere_buffer_binding
 
-# program["triCount"].write(struct.pack("i", len(triangles)))
+program["triCount"].write(struct.pack("i", len(triangles)))
 tri_buffer_binding = 2
 program["triBuffer"].binding = tri_buffer_binding
 
