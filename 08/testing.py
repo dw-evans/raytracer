@@ -9,14 +9,16 @@ import pygame
 import numpy as np
 from numpy import tan, radians, sin, cos
 
+
+import time
 from typing import Iterable
 
 
 class Ray:
     def __init__(
         self,
-        origin: Vector3 = Vector3((0.0, 0.0, 0.0)),
-        dir: Vector3 = Vector3((0.0, 0.0, 0.0)),
+        origin: Vector3 = Vector3((0.0, 0.0, 0.0), dtype="f4"),
+        dir: Vector3 = Vector3((0.0, 0.0, 0.0), dtype="f4"),
     ) -> None:
         self.origin = origin
         self.dir = dir
@@ -44,8 +46,8 @@ class HitInfo:
     def __init__(self) -> None:
         self.didHit: bool = False
         self.dst: float = 0.0
-        self.hitPoint: Vector3 = Vector3((0.0, 0.0, 0.0))
-        self.normal: Vector3 = Vector3((0.0, 0.0, 0.0))
+        self.hitPoint: Vector3 = Vector3((0.0, 0.0, 0.0), dtype="f4")
+        self.normal: Vector3 = Vector3((0.0, 0.0, 0.0), dtype="f4")
 
 
 class Camera:
@@ -53,14 +55,14 @@ class Camera:
         self.fov = 28.072  # degrees
         self.aspect = 16.0 / 9.0
         self.near_plane = 240.0
-        self.pos = Vector3((0.0, 0.0, 0.0))
+        self.pos = Vector3((0.0, 0.0, 0.0), dtype="f4")
         self.roll = 0.0
         self.pitch = 0.0
         self.yaw = 0.0
         # self.fov = 30.0  # degrees
         # self.aspect = 16.0 / 9.0
         # self.near_plane = 240.0
-        # self.pos = Vector3((0.0, 0.0, 0.0))
+        # self.pos = Vector3((0.0, 0.0, 0.0), dtype="f4")
         # self.roll = 0.0
         # self.pitch = 0.0
         # self.yaw = 0.0
@@ -124,7 +126,8 @@ def rayTriangleIntersect(ray: Ray, tri: Triangle) -> HitInfo:
     v0v1 = v1 - v0
     v0v2 = v2 - v0
 
-    N = v0v1.cross(v0v2)
+    N = v0v1.cross(v0v2)  # could this be inverted?
+    # N = v0v2.cross(v0v1)
 
     area2 = N.length
 
@@ -155,7 +158,6 @@ def rayTriangleIntersect(ray: Ray, tri: Triangle) -> HitInfo:
     vp0 = P - v0
     C = edge0.cross(vp0)
     if N.dot(C) < 0.0:
-        hit
         hit.didHit = False
         return hit
 
@@ -175,6 +177,9 @@ def rayTriangleIntersect(ray: Ray, tri: Triangle) -> HitInfo:
         hit.didHit = False
         return hit
 
+    # if (-0.1 < ray.dir.x < 0.1) and (0.25 < ray.dir.y < 0.28):
+    #     pass
+
     hit.didHit = True
     hit.normal = tri.normal
 
@@ -185,7 +190,7 @@ def main() -> None:
 
     cam = Camera()
 
-    h = 30
+    h = 60
 
     # I think the near plane needs to be scaled with the height to make it work
     cam.fov = 28.072
@@ -198,15 +203,13 @@ def main() -> None:
     scale_factor = 4
     pygame.init()
 
-    # ray = Ray(Vector3((0.0, 0.0, 0.0)), Vector3(0., 0., 1.))
+    # v0 = Vector3((-2.0, -2.0, 15.0), dtype="f4")
+    # v1 = Vector3((2.0, -2.0, 15.0), dtype="f4")
+    # v2 = Vector3((0.0, 4.0, 15.0), dtype="f4")
 
-    # v0 = Vector3((-2.0, -2.0, 15.0))
-    # v1 = Vector3((2.0, -2.0, 15.0))
-    # v2 = Vector3((0.0, 4.0, 15.0))
-
-    v0 = Vector3((0.0, 3.0, 15.0))
-    v1 = Vector3((-1.0, 0.0, 15.0))
-    v2 = Vector3((2.0, 0.0, 15.0))
+    v0 = Vector3((2, 0, 9), dtype="f4")
+    v1 = Vector3((-2, 0, 11), dtype="f4")
+    v2 = Vector3((0, 1, 10), dtype="f4")
 
     tri = Triangle(v0, v1, v2)
 
@@ -223,9 +226,13 @@ def main() -> None:
     for i in range(w):
         for j in range(h):
             r = Ray()
-            r.origin = Vector3((0.0, 0.0, 0.0))
+            r.origin = Vector3((0.0, 0.0, 0.0), dtype="f4")
             r.dir = Vector3(
-                (i - cam.plane_width / 2, j - cam.plane_height / 2, cam.near_plane)
+                (
+                    i - cam.plane_width / 2,
+                    (h - j) - cam.plane_height / 2,
+                    cam.near_plane,
+                )
             )
             r.dir.normalize()
             rays[i, j] = r
@@ -254,19 +261,19 @@ def main() -> None:
                     ray: Ray = rays[i, j]
 
                     pos = Vector3(
-                        [
+                        (
                             (i - cam.plane_width / 2) / cam.plane_width,
                             (j - cam.plane_height / 2) / cam.plane_height,
                             1.0,
-                        ]
+                        )
                     )
 
                     viewPointLocal = Vector3(
-                        [
+                        (
                             pos.x * cam.plane_width,
                             pos.y * cam.plane_height,
                             pos.z * cam.near_plane,
-                        ]
+                        )
                     )
 
                     viewPoint = cam.local_to_world_matrix * cam.view_params
@@ -282,29 +289,11 @@ def main() -> None:
                     if hit.didHit:
                         pass
 
-                    # color = (
-                    #     abs(ray.dir.x) * 255,
-                    #     abs(ray.dir.y) * 255,
-                    #     abs(ray.dir.z) * 255,
-                    # )
                     color = (
                         255 if hit.didHit else 0.0,
                         255 if hit.didHit else 0.0,
                         255 if hit.didHit else 0.0,
                     )
-                    # color = (
-                    #     abs(hit.normal[0]) * 255,
-                    #     abs(hit.normal[1]) * 255,
-                    #     abs(hit.normal[2]) * 255,
-                    # )
-
-                    # color=(
-                    #     max(hit.normal[0], 0)*255,
-                    #     max(hit.normal[1], 0)*255,
-                    #     max(hit.normal[2], 0)*255,
-                    # )
-
-                    # color = np.maximum(np.minimum(ray.dir * 255 * 1e6, 255), 0)
 
                     pygame.draw.rect(
                         surface=screen,
@@ -313,7 +302,9 @@ def main() -> None:
                     )
 
             pygame.display.flip()
-            clock.tick(24)
+            # time.sleep(1.0)
+
+            clock.tick(0.1)
 
     except KeyboardInterrupt:
         pass

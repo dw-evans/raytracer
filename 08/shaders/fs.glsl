@@ -62,7 +62,7 @@ struct Triangle
 layout(std140) uniform triBuffer 
 {
     // int spheresCount; // I cannot figure out how to get this to work
-    Triangle triangles[10];
+    Triangle triangles[1];
 };
 
 struct Ray 
@@ -188,66 +188,69 @@ HitInfo rayTriangle2(Ray ray, Triangle tri)
 {
     HitInfo hitInfo = defaultHitInfo();
 
-    // edges
-    vec3 edgeAB = tri.posB - tri.posA;
-    vec3 edgeAC = tri.posC - tri.posA;
-    vec3 edgeBC = tri.posC - tri.posB;
-    // normal
-    vec3 crossproduct = cross(edgeAB, edgeAC); // the not-normalized normal
+    vec3 v0 = tri.posA;
+    vec3 v1 = tri.posB;
+    vec3 v2 = tri.posC;
+
+    vec3 dir = ray.dir;
+    vec3 orig = ray.origin;
     
-    // the normal vector (normalized)
-    vec3 N = normalize(crossproduct);
+    vec3 v0v1 = v1 - v0;
+    vec3 v0v2 = v2 - v0;
 
-    // solving the last part of teh plane equation
-    float D = -dot(N, tri.posA);
+    vec3 N = cross(v0v1, v0v2);
 
-
-    // but what if the ray and triangle are parallel
-    // dot product of direction and normal vector is close to zero
-
-
-    // check if the ray is parallel
-    float parallelCheck = dot(N, ray.dir);
-    // if the ray is parallel, there is no intersection therefore no hit.
-    if (abs(parallelCheck) <= 1e-6)
+    float kEpsilon = 1e-6;
+    float NDotRayDirection = dot(N, dir);
+    if (abs(NDotRayDirection) < kEpsilon)
     {
         hitInfo.didHit = false;
         return hitInfo;
     }
 
-    // the ray distance travelled to the intersection
-    float t = -(dot(N, ray.origin) + D) / dot(N, ray.dir);
+    float d = -dot(N, v0);
+
+    float t = -(dot(N, orig) + d) / NDotRayDirection;
 
     if (t < 0.0)
     {
         hitInfo.didHit = false;
-        return hitInfo; 
+        return hitInfo;
     }
-    
-    // the position of the hit
-    vec3 phit = ray.origin * t * ray.dir;
 
-    // check if the phit is within the triangle, we have only checked intersection with the plane
-    vec3 C0 = phit - tri.posA;
-    vec3 C1 = phit - tri.posB;
-    vec3 C2 = phit - tri.posC;
+    vec3 P = orig + t * dir;
 
-    bool insideCheck = (
-        dot(N, cross(edgeAB, C0)) > 0.0 &&
-        dot(N, cross(edgeAC, C1)) > 0.0 &&
-        dot(N, cross(edgeBC, C2)) > 0.0 
-    );
+    vec3 C;
 
-    if (!insideCheck)
+    vec3 edge0 = v1 - v0;
+    vec3 vp0 = P - v0;
+    C = cross(edge0, vp0);
+    if (dot(N, C) < 0.0)
     {
         hitInfo.didHit = false;
         return hitInfo;
     }
 
+    vec3 edge1 = v2 - v1;
+    vec3 vp1 = P - v1;
+    C = cross(edge1, vp1);
+    if (dot(N, C) < 0.0)
+    {
+        hitInfo.didHit = false;
+        return hitInfo;
+    }
+
+    vec3 edge2 = v0 - v2;
+    vec3 vp2 = P - v2;
+    C = cross(edge2, vp2);
+    if (dot(N, C) < 0.0)
+    {
+        hitInfo.didHit = false;
+        return hitInfo;
+    }
+
+    hitInfo.normal = tri.normalA;
     hitInfo.didHit = true;
-    hitInfo.dst = t;
-    hitInfo.hitPoint = phit;
-    hitInfo.normal = N;
 
     return hitInfo;
 
@@ -349,17 +352,7 @@ void main()
 
     totalIncomingLight /= RAYS_PER_PIXEL;
 
-
-    Triangle myTriangle = Triangle(
-        vec3(1, -1, 100),
-        vec3(-1, -1, 100),
-        vec3(0, 1, 104),
-        vec3(0.0, 0.0, -1.0),
-        vec3(0.0, 0.0, -1.0),
-        vec3(0.0, 0.0, -1.0)
-    );
-
-    myTriangle = triangles[0];
+    Triangle myTriangle = triangles[0];
 
     // HitInfo hit2 = rayTriangle2(ray, myTriangl2e);
     // the normal seems to work, but the hit info is not correctly detecting hits
@@ -379,9 +372,11 @@ void main()
     }
     else 
     {
-        color = vec4(totalIncomingLight, 1.0);
-        color = vec4(totalIncomingLight, 1.0) * 0.5 +
-        vec4(normalize(abs(hit2.normal)), 1.0) * 0.5;
+        // color = vec4(0.5);
+        color = vec4(totalIncomingLight, 1.0) * 0.5
+        // + vec4(vec3(hit2.didHit), 1.0) * 0.5
+        + vec4(vec3(hit2.didHit), 1.0) * 0.5
+        ;
     }
 
     // HitInfo hit2 = rayTriangle2(ray, myTriangle);

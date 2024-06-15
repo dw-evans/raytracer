@@ -105,27 +105,39 @@ class Triangle(ByteableObject):
         self.posB = posB
         self.posC = posC
         # lets just make the normals the basic way
-        self.normalA: Vector3 = self.normal
-        self.normalB: Vector3 = self.normal
-        self.normalC: Vector3 = self.normal
+        # self.normalA: Vector3 = self.normal
+        # self.normalB: Vector3 = self.normal
+        # self.normalC: Vector3 = self.normal
 
     @property
-    def normal(self):
+    def normal(self) -> Vector3:
         edge_ab = self.posB - self.posA
         edge_ac = self.posC - self.posA
         return edge_ab.cross(edge_ac)
+
+    @property
+    def normalA(self):
+        return self.normal
+
+    @property
+    def normalB(self):
+        return self.normal
+
+    @property
+    def normalC(self):
+        return self.normal
 
     def tobytes(self) -> bytes | bytearray:
         # return struct.pack("3f 3f 3f", *self.posA, *self.posB, *self.posC)
         return struct.pack(
             # "3f 3f 3f",
-            "3f 3f 3f 3f 3f 3f",
+            "3f4x 3f4x 3f4x 3f4x 3f4x 3f4x",
             *self.posA,
             *self.posB,
             *self.posC,
-            *self.normalA,
-            *self.normalB,
-            *self.normalC,
+            *self.normal,
+            *self.normal,
+            *self.normal,
         )
 
 
@@ -151,13 +163,12 @@ class Material(ByteableObject):
         # )
 
 
-
 class Camera:
     def __init__(self) -> None:
         self.fov = 30.0  # degrees
         self.aspect = 16.0 / 9.0
         self.near_plane = 240.0
-        self.pos = Vector3((0.0, 0.0, 0.0))
+        self.pos = Vector3((0.0, 0.0, 0.0), dtype="f4")
         # self.orientation = Matrix44.identity()
         self.roll = 0.0
         self.pitch = 0.0
@@ -257,72 +268,72 @@ vertices = np.array(
 )
 
 material1 = Material(
-    Vector4((1.0, 1.0, 0.0, 1.0)),
-    Vector3((0.0, 0.0, 0.0)),
+    Vector4((1.0, 1.0, 0.0, 1.0), dtype="f4"),
+    Vector3((0.0, 0.0, 0.0), dtype="f4"),
     0.0,
 )
 material2 = Material(
-    Vector4((0.6, 0.3, 1.0, 1.0)),
-    Vector3((0.0, 0.0, 0.0)),
+    Vector4((0.6, 0.3, 1.0, 1.0), dtype="f4"),
+    Vector3((0.0, 0.0, 0.0), dtype="f4"),
     0.0,
 )
 # light source
 material3 = Material(
-    Vector4((0.0, 0.0, 0.0, 1.0)),
-    Vector3((0.4, 0.0, 0.5)),
+    Vector4((0.0, 0.0, 0.0, 1.0), dtype="f4"),
+    Vector3((0.4, 0.0, 0.5), dtype="f4"),
     100.0,
 )
 material4 = Material(
-    Vector4((0.1, 0.7, 0.3, 1.0)),
-    Vector3((0.0, 0.0, 0.0)),
+    Vector4((0.1, 0.7, 0.3, 1.0), dtype="f4"),
+    Vector3((0.0, 0.0, 0.0), dtype="f4"),
     0.0,
 )
 # light source
 material5 = Material(
-    Vector4((0.0, 0.0, 0.0, 1.0)),
-    Vector3((247 / 255, 214 / 255, 128 / 255)),
+    Vector4((0.0, 0.0, 0.0, 1.0), dtype="f4"),
+    Vector3((247 / 255, 214 / 255, 128 / 255), dtype="f4"),
     40.0,
 )
 
 
 spheres = [
     Sphere(
-        pos=Vector3((0.0, -1001.0, 8)),
+        pos=Vector3((0.0, -1001.0, 8), dtype="f4"),
         radius=1000.0,
         material=material4,
     ),
     Sphere(
-        pos=Vector3((0.0, 0.0, 10.0)),
+        pos=Vector3((0.0, 0.0, 10.0), dtype="f4"),
         radius=1.0,
         material=material1,
     ),
     Sphere(
-        pos=Vector3((2.0, 0.0, 10.0)),
+        pos=Vector3((2.0, 0.0, 10.0), dtype="f4"),
         radius=0.5,
         material=material2,
     ),
     Sphere(
-        pos=Vector3((-3.0, 0.0, 10.0)),
+        pos=Vector3((-3.0, 0.0, 10.0), dtype="f4"),
         radius=0.9,
         material=material2,
     ),
     Sphere(
-        pos=Vector3((-2.0, 1.5, 5.0)),
+        pos=Vector3((-2.0, 1.5, 5.0), dtype="f4"),
         radius=0.6,
         material=material3,
     ),
     Sphere(
-        pos=Vector3((5, 9.0, 12)),
+        pos=Vector3((5, 9.0, 12), dtype="f4"),
         radius=3.0,
         material=material5,
     ),
     # Sphere(
-    #     pos=Vector3((0.0, 13, 10)),
+    #     pos=Vector3((0.0, 13, 10), dtype="f4"),
     #     radius=0.8,
     #     material=material3,
     # ),
     # Sphere(
-    #     pos=Vector3((0.0, 7, 10)),
+    #     pos=Vector3((0.0, 7, 10), dtype="f4"),
     #     radius=0.6,
     #     material=material2,
     # ),
@@ -330,9 +341,9 @@ spheres = [
 
 triangles = [
     Triangle(
-        Vector3((0.0, 0.0, 9.0)),
-        Vector3((0.0, 0.0, 11.0)),
-        Vector3((0.0, 1.0, 10.0)),
+        Vector3((0.0, 0.0, 9.0), dtype="f4"),
+        Vector3((0.0, 0.0, 11.0), dtype="f4"),
+        Vector3((0.0, 1.0, 10.0), dtype="f4"),
     )
 ]
 
@@ -340,17 +351,17 @@ triangles = [
 sp1, sp2, sp3 = [
     Sphere(
         pos=triangles[0].posA,
-        radius=0.1,
+        radius=0.05,
         material=material1,
     ),
     Sphere(
         pos=triangles[0].posB,
-        radius=0.1,
+        radius=0.25,
         material=material1,
     ),
     Sphere(
         pos=triangles[0].posC,
-        radius=0.1,
+        radius=0.5,
         material=material1,
     ),
 ]
@@ -423,26 +434,32 @@ try:
         # cam.pitch = 3 * sin(time / 15)
         # cam.roll = 6 * sin(time / 8)
 
-        triangles[0].posA.x = 2.0 + 1 * sin(time / 3)
-        triangles[0].posB.x = -2.0 + 1 * sin(time / 7)
-        triangles[0].posC.x = -0.0 + 1 * sin(time / 5)
+        # triangles[0].posA.x = 2.0 + 1 * sin(time / 3)
+        # triangles[0].posB.x = -2.0 + 1 * sin(time / 7)
+        # triangles[0].posC.x = -0.0 + 1 * sin(time / 5)
 
-        # sp1.pos = triangles[0].posA
-        # sp2.pos = triangles[0].posB
-        # sp3.pos = triangles[0].posC
+        triangles[0].posA = Vector3((-2, 0, 11), dtype="f4")
+        triangles[0].posB = Vector3((2, 0, 9), dtype="f4")
+        triangles[0].posC = Vector3((0, 2 + 1.0 * sin(time), 10), dtype="f4")
+
+        sp1.pos = triangles[0].posA
+        sp2.pos = triangles[0].posB
+        sp3.pos = triangles[0].posC
+
         cam.pos.z = 0.0 + 0.5 * sin(time / 8)
+        cam.pos.z = -10.0
 
         program["ViewParams"].write(cam.view_params.astype("f4"))
         program["CamLocalToWorldMatrix"].write(cam.local_to_world_matrix.astype("f4"))
         program["CamGlobalPos"].write(cam.pos.astype("f4"))
 
         sphere_bytes = iter_to_bytes(spheres)
-        sphere_bytes += b"\x00" * (16 - len(sphere_bytes) % 16)
+        # sphere_bytes += b"\x00" * (16 - len(sphere_bytes) % 16)
         sphere_buffer = ctx.buffer(sphere_bytes)
         sphere_buffer.bind_to_uniform_block(sphere_buffer_binding)
 
         tri_bytes = iter_to_bytes(triangles)
-        tri_bytes += b"\x00" * (16 - len(tri_bytes) % 16)
+        # tri_bytes += b"\x00" * (16 - len(tri_bytes) % 16)
         tri_buffer = ctx.buffer(tri_bytes)
         tri_buffer.bind_to_uniform_block(tri_buffer_binding)
 
