@@ -33,6 +33,7 @@ struct Material
     vec4 color;
     vec3 emissionColor;
     float emissionStrength;
+    float smoothness;
 };
 
 struct Sphere
@@ -201,6 +202,21 @@ HitInfo calculateRayCollision(Ray ray)
 
     closestHit.dst = inf;
 
+    // loop over all triangles in the scene
+    for (int i = 0; i < triCount; i++)
+    {
+        Triangle tri = triangles[i];
+        HitInfo hitInfo = rayTriangle(
+            ray,
+            tri
+        );
+
+        if (hitInfo.didHit && hitInfo.dst < closestHit.dst)
+        {
+            closestHit = hitInfo;
+            closestHit.material = tri.material;
+        }
+    }
     // loop over all spheres in the scene
     for (int i = 0; i < spheresCount; i++)
     {
@@ -216,21 +232,6 @@ HitInfo calculateRayCollision(Ray ray)
             closestHit = hitInfo;
             closestHit.material = sphere.material;
             // closestHit.sphere = sphere;
-        }
-    }
-    // loop over all triangles in the scene
-    for (int i = 0; i < triCount; i++)
-    {
-        Triangle tri = triangles[i];
-        HitInfo hitInfo = rayTriangle(
-            ray,
-            tri
-        );
-
-        if (hitInfo.didHit && hitInfo.dst < closestHit.dst)
-        {
-            closestHit = hitInfo;
-            closestHit.material = tri.material;
         }
     }
 
@@ -287,10 +288,15 @@ vec3 traceRay(Ray ray, inout uint rngState)
             ray.origin = hitInfo.hitPoint;
             // ray.dir = randomDirectionHemisphere(hitInfo.normal, rngState);
             // why on earth does this work?
-            ray.dir = normalize(hitInfo.normal + randomDirection(rngState));
-            
+            // ray.dir = normalize(hitInfo.normal + randomDirection(rngState));
+
             // Material material = hitInfo.material;
             Material material = hitInfo.material;
+
+            vec3 diffuseDir = normalize(hitInfo.normal + randomDirection(rngState));
+            vec3 specularDir = reflect(ray.dir, hitInfo.normal);
+
+            ray.dir = mix(diffuseDir, specularDir, material.smoothness);
 
             vec3 emittedLight = material.emissionColor * material.emissionStrength;
 
@@ -347,12 +353,8 @@ void main()
     {
         float weight = 1.0 / (float(frameNumber) + 2);
         color = 
-        // texture(previousFrame, (fragPosition.xy + 1.0) / 2) * (1-weight) + 
-        // vec4(totalIncomingLight, 1.0) * weight;
-
-        texture(previousFrame, (fragPosition.xy + 1.0) / 2) * 0.01 
-        + vec4(totalIncomingLight, 1.0) * 0.01 
-        // + vec4(normalize(abs(hit2.normal)), 1.0)
+        texture(previousFrame, (fragPosition.xy + 1.0) / 2) * (1-weight)
+        + vec4(totalIncomingLight, 1.0) * weight
         ;
     }
     else 

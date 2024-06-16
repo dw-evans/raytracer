@@ -156,14 +156,20 @@ class Material(ByteableObject):
         color: Vector4,
         emissionColor: Vector3,
         emissionStrength: float,
+        smoothness: float = 0.5,
     ) -> None:
         self.color = color
         self.emissionColor = emissionColor
         self.emissionStrength = emissionStrength
+        self.smoothness = smoothness
 
     def tobytes(self):
         return struct.pack(
-            "4f 3f f", *self.color, *self.emissionColor, self.emissionStrength
+            "4f 3f f f12x",
+            *self.color,
+            *self.emissionColor,
+            self.emissionStrength,
+            self.smoothness,
         )
 
 
@@ -224,17 +230,21 @@ WINDOW_HEIGHT = 1080
 # ASPECT_RATIO = 16.0 / 9.0
 
 MAX_RAY_BOUNCES = 6
-RAYS_PER_PIXEL = 300
+RAYS_PER_PIXEL = 30
 
 
-STATIC_RENDER = False
+STATIC_RENDER = True
 
-STATIC_RENDER_FRAMERATE = 24
+STATIC_RENDER_FRAMERATE = 60
 STATIC_RENDER_CYCLES_PER_FRAME = 300
 STATIC_RENDER_TOTAL_FRAMES = 24
 
 
-DYNAMIC_RENDER_FRAMERATE = 24
+DYNAMIC_RENDER_FRAMERATE = 60
+
+
+MOUSE_ENABLED = False
+KEYBOARD_ENABLED = False
 
 
 cam = Camera()
@@ -291,11 +301,13 @@ material1 = Material(
     Vector4((1.0, 1.0, 0.0, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
     0.0,
+    smoothness=0.6,
 )
 material2 = Material(
     Vector4((0.6, 0.3, 1.0, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
     0.0,
+    smoothness=0.00,
 )
 # light source
 material3 = Material(
@@ -307,12 +319,14 @@ material4 = Material(
     Vector4((0.1, 0.7, 0.3, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
     0.0,
+    smoothness=0.5,
 )
 # light source
 material5 = Material(
     Vector4((0.0, 0.0, 0.0, 1.0), dtype="f4"),
     Vector3((247 / 255, 214 / 255, 128 / 255), dtype="f4"),
     40.0,
+    smoothness=0.6,
 )
 
 
@@ -349,12 +363,15 @@ spheres = [
     ),
 ]
 
+
+# changing the winding direction turns the pixels black. maybe this should be transparent
+
 triangles = [
     Triangle(
-        Vector3((0.0, 0.0, 9.0), dtype="f4"),
-        Vector3((0.0, 0.0, 11.0), dtype="f4"),
-        Vector3((0.0, 1.0, 10.0), dtype="f4"),
-        material=material4,
+        Vector3((0.0, -1.0, 9.0), dtype="f4"),
+        Vector3((0.0, 0.0, 15.0), dtype="f4"),
+        Vector3((0.0, 2.0, 10.0), dtype="f4"),
+        material=material2,
     )
 ]
 
@@ -424,6 +441,44 @@ try:
                 pygame.quit()
                 sys.exit()
 
+            if KEYBOARD_ENABLED:
+                SPEED = 2.0
+                key_state = pygame.key.get_pressed()
+                if key_state[pygame.K_w]:
+                    cam.pos.z += 1 / DYNAMIC_RENDER_FRAMERATE * SPEED
+                if key_state[pygame.K_s]:
+                    cam.pos.z += -1 / DYNAMIC_RENDER_FRAMERATE * SPEED
+                if key_state[pygame.K_d]:
+                    cam.pos.x += -1 / DYNAMIC_RENDER_FRAMERATE * SPEED
+                if key_state[pygame.K_a]:
+                    cam.pos.x += 1 / DYNAMIC_RENDER_FRAMERATE * SPEED
+                if key_state[pygame.K_q]:
+                    cam.pos.z += -1 / DYNAMIC_RENDER_FRAMERATE * SPEED
+                if key_state[pygame.K_e]:
+                    cam.pos.z += -1 / DYNAMIC_RENDER_FRAMERATE * SPEED
+
+            if MOUSE_ENABLED:
+                MOUSE_SENSITIVITY = 1.0
+                pygame.event.set_grab(True)
+                pygame.mouse.set_visible(False)
+                mouse_dx, mouse_dy = pygame.mouse.get_rel()
+                if mouse_dx:
+                    cam.yaw += (
+                        0.01
+                        * MOUSE_SENSITIVITY
+                        * mouse_dx
+                        * 1
+                        / DYNAMIC_RENDER_FRAMERATE
+                    )
+                if mouse_dy:
+                    cam.roll += (
+                        0.01
+                        * MOUSE_SENSITIVITY
+                        * mouse_dy
+                        * 1
+                        / DYNAMIC_RENDER_FRAMERATE
+                    )
+
         time = pygame.time.get_ticks() / np.float32(1000.0)
         if STATIC_RENDER:
             time = 0
@@ -439,23 +494,19 @@ try:
         spheres[1].pos.z = 16 + 0.5 * cos(time * 1)
 
         # cam.yaw = 15 * sin(time / 4)
-        # cam.pitch = 3 * sin(time / 15)
-        # cam.roll = 6 * sin(time / 8)
+        # cam.pitch = 20 * sin(time / 15)
+        # cam.roll = 20 * sin(time / 8)
 
-        # triangles[0].posA.x = 2.0 + 1 * sin(time / 3)
-        # triangles[0].posB.x = -2.0 + 1 * sin(time / 7)
-        # triangles[0].posC.x = -0.0 + 1 * sin(time / 5)
+        triangles[0].posA.x = 2.0 + 1 * sin(time / 3)
+        triangles[0].posB.x = -2.0 + 1 * sin(time / 7)
+        triangles[0].posC.x = -0.0 + 1 * sin(time / 5)
 
-        triangles[0].posA = Vector3((-2, 0, 11), dtype="f4")
-        triangles[0].posB = Vector3((2, 0, 9), dtype="f4")
-        triangles[0].posC = Vector3((0, 2 + 1.0 * sin(time), 10), dtype="f4")
+        # triangles[0].posA = Vector3((-2, 0, 11), dtype="f4")
+        # triangles[0].posB = Vector3((2, 0, 9), dtype="f4")
+        # triangles[0].posC = Vector3((0, 2 + 1.0 * sin(time), 10), dtype="f4")
 
-        sp1.pos = triangles[0].posA
-        sp2.pos = triangles[0].posB
-        sp3.pos = triangles[0].posC
-
-        cam.pos.z = 0.0 + 0.5 * sin(time / 8)
-        cam.pos.z = -10.0
+        cam.pos.z = 0.0 + 3.0 * sin(time / 8)
+        # cam.pos.z = -10.0
 
         program["ViewParams"].write(cam.view_params.astype("f4"))
         program["CamLocalToWorldMatrix"].write(cam.local_to_world_matrix.astype("f4"))
@@ -481,7 +532,7 @@ try:
         frame_counter += 1
 
         pygame.display.flip()
-        clock.tick(24)
+        clock.tick(DYNAMIC_RENDER_FRAMERATE)
 
         pass
 
