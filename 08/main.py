@@ -233,7 +233,7 @@ MAX_RAY_BOUNCES = 6
 RAYS_PER_PIXEL = 30
 
 
-STATIC_RENDER = True
+STATIC_RENDER = False
 
 STATIC_RENDER_FRAMERATE = 60
 STATIC_RENDER_CYCLES_PER_FRAME = 300
@@ -369,7 +369,7 @@ spheres = [
 triangles = [
     Triangle(
         Vector3((0.0, -1.0, 9.0), dtype="f4"),
-        Vector3((0.0, 0.0, 15.0), dtype="f4"),
+        Vector3((0.0, -10, 15.0), dtype="f4"),
         Vector3((0.0, 2.0, 10.0), dtype="f4"),
         material=material2,
     )

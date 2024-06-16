@@ -79,7 +79,6 @@ struct HitInfo
     float dst;
     vec3 hitPoint;
     vec3 normal;
-    // Sphere sphere;
     Material material;
 };
 
@@ -87,9 +86,15 @@ struct HitInfo
 HitInfo defaultHitInfo() {
     HitInfo hitInfo;
     hitInfo.didHit = false;
-    hitInfo.dst = 0.0;
+    hitInfo.dst = inf;
     hitInfo.hitPoint = vec3(0.0);
     hitInfo.normal = vec3(0.0);
+    hitInfo.material = Material(
+        vec4(0.0),
+        vec3(0.0),
+        0.0,
+        0.0
+    );
     return hitInfo;
 }
 
@@ -189,10 +194,15 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
     hitInfo.normal = tri.normalA;
     hitInfo.didHit = true;
     hitInfo.material = tri.material;
+    hitInfo.dst = t;
 
     return hitInfo;
 
 }
+
+
+// not sure what is going on here
+// seems like the triangle colliusion fails when dst is set to inf
 
 
 HitInfo calculateRayCollision(Ray ray)
@@ -200,23 +210,6 @@ HitInfo calculateRayCollision(Ray ray)
     // calculates the ray collisions for all 
     HitInfo closestHit = defaultHitInfo();
 
-    closestHit.dst = inf;
-
-    // loop over all triangles in the scene
-    for (int i = 0; i < triCount; i++)
-    {
-        Triangle tri = triangles[i];
-        HitInfo hitInfo = rayTriangle(
-            ray,
-            tri
-        );
-
-        if (hitInfo.didHit && hitInfo.dst < closestHit.dst)
-        {
-            closestHit = hitInfo;
-            closestHit.material = tri.material;
-        }
-    }
     // loop over all spheres in the scene
     for (int i = 0; i < spheresCount; i++)
     {
@@ -231,7 +224,21 @@ HitInfo calculateRayCollision(Ray ray)
         {
             closestHit = hitInfo;
             closestHit.material = sphere.material;
-            // closestHit.sphere = sphere;
+        }
+    }
+    // loop over all triangles in the scene
+    for (int i = 0; i < triCount; i++)
+    {
+        Triangle tri = triangles[i];
+        HitInfo hitInfo = rayTriangle(
+            ray,
+            tri
+        );
+
+        if (hitInfo.didHit && hitInfo.dst < closestHit.dst)
+        {
+            closestHit = hitInfo;
+            closestHit.material = tri.material;
         }
     }
 
