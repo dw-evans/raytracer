@@ -30,17 +30,17 @@ uniform bool STATIC_RENDER;
 
 struct Material
 {
-    vec4 color;
-    vec3 emissionColor;
-    float emissionStrength;
-    float smoothness;
+    vec4 color; // 16 
+    vec3 emissionColor; // 12
+    float emissionStrength; // 4
+    float smoothness; // 4 + 12
 };
 
 struct Sphere
 {
-    vec3 position;
-    float radius;
-    Material material;
+    vec3 position; // 12 + 4
+    float radius; // 4 + 12
+    Material material; // ...
 };
 
 // layout(std140)
@@ -52,19 +52,19 @@ layout(std140) uniform sphereBuffer
 
 struct Triangle
 {
-    vec3 posA;
-    vec3 posB;
-    vec3 posC;
-    vec3 normalA;
-    vec3 normalB;
-    vec3 normalC;
-    Material material;
+    vec3 posA; // 12 + 4
+    vec3 posB; // 12 + 4
+    vec3 posC; // 12 + 4
+    vec3 normalA; // 12 + 4
+    vec3 normalB; // 12 + 4
+    vec3 normalC; // 12 + 4
+    Material material; // ...
 };
 
 layout(std140) uniform triBuffer 
 {
     // int spheresCount; // I cannot figure out how to get this to work
-    Triangle triangles[1];
+    Triangle triangles[TRIANGLES_COUNT_MAX];
 };
 
 struct Ray 
@@ -141,6 +141,7 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
     vec3 v0v2 = v2 - v0;
 
     vec3 N = cross(v0v1, v0v2);
+
 
     float kEpsilon = 1e-6;
     float NDotRayDirection = dot(N, dir);
@@ -356,18 +357,26 @@ void main()
     // HitInfo hit2 = rayTriangle(ray, myTriangle);
     // HitInfo hit2 = rayTriangle(ray, myTriangle);
 
+    // HitInfo hit0 = rayTriangle(ray, triangles[0]);
+    // HitInfo hit1 = rayTriangle(ray, triangles[1]);
+
     if (STATIC_RENDER)
     {
         float weight = 1.0 / (float(frameNumber) + 2);
         color = 
         texture(previousFrame, (fragPosition.xy + 1.0) / 2) * (1-weight)
         + vec4(totalIncomingLight, 1.0) * weight
+        // texture(previousFrame, (fragPosition.xy + 1.0) / 2) * 0.001
+        // + vec4(totalIncomingLight, 1.0) * 0.001
+        // + vec4(abs(normalize(hit0.normal)), 0.5)
+        // + vec4(abs(normalize(hit1.normal)), 0.5)
         ;
     }
     else 
     {
         // color = vec4(0.5);
-        color = vec4(totalIncomingLight, 1.0) * 0.5
+        color = vec4(totalIncomingLight * 0.5, 1.0)
+        // + vec4(vec3(0.5), 0.5)
         // + vec4(vec3(hit2.didHit), 1.0) * 0.5
         // + vec4(hit2.material.color) * 0.5
         ;
