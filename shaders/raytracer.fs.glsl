@@ -1,4 +1,4 @@
-#version 330 core
+#version 430 core
 
 in vec3 fragPosition;
 out vec4 color;
@@ -13,7 +13,7 @@ uniform vec3 CamGlobalPos;
 uniform float time;
 
 const int SPHERES_COUNT_MAX = 256;
-const int TRIANGLES_COUNT_MAX = 256;
+const int TRIANGLES_COUNT_MAX = 455;
 float inf = 1.0 / 0.0;
 float pi = 3.14159265359;
 uniform int MAX_BOUNCES;
@@ -61,11 +61,64 @@ struct Triangle
     Material material; // ...
 };
 
-layout(std140) uniform triBuffer 
+// layout(std140) uniform triBuffer 
+// {
+//     Triangle triangles[TRIANGLES_COUNT_MAX];
+// };
+
+// layout(std140) uniform triBuffer 
+// {
+//     Triangle triangles[TRIANGLES_COUNT_MAX];
+// };
+
+
+layout(std140) uniform triBuffer0 
 {
-    // int spheresCount; // I cannot figure out how to get this to work
-    Triangle triangles[TRIANGLES_COUNT_MAX];
+    Triangle triangles0[TRIANGLES_COUNT_MAX];
 };
+layout(std140) uniform triBuffer1 
+{
+    Triangle triangles1[TRIANGLES_COUNT_MAX];
+};
+layout(std140) uniform triBuffer2 
+{
+    Triangle triangles2[TRIANGLES_COUNT_MAX];
+};
+layout(std140) uniform triBuffer3 
+{
+    Triangle triangles3[TRIANGLES_COUNT_MAX];
+};
+layout(std140) uniform triBuffer4 
+{
+    Triangle triangles4[TRIANGLES_COUNT_MAX];
+};
+
+
+Triangle getTriangle(int index)
+{
+    Triangle ret;
+    if (index < TRIANGLES_COUNT_MAX)
+    {
+        ret = triangles0[index];
+    }
+    else if (index < TRIANGLES_COUNT_MAX * 2)
+    {
+        ret = triangles1[index - TRIANGLES_COUNT_MAX];
+    }
+    else if (index < TRIANGLES_COUNT_MAX * 3)
+    {
+        ret = triangles2[index - TRIANGLES_COUNT_MAX * 2];
+    }
+    else if (index < TRIANGLES_COUNT_MAX * 4)
+    {
+        ret = triangles3[index - TRIANGLES_COUNT_MAX * 3];
+    }
+    else if (index < TRIANGLES_COUNT_MAX * 5)
+    {
+        ret = triangles4[index - TRIANGLES_COUNT_MAX * 4];
+    }
+    return ret;
+}
 
 struct Ray 
 {
@@ -230,7 +283,8 @@ HitInfo calculateRayCollision(Ray ray)
     // loop over all triangles in the scene
     for (int i = 0; i < triCount; i++)
     {
-        Triangle tri = triangles[i];
+        Triangle tri = getTriangle(i);
+
         HitInfo hitInfo = rayTriangle(
             ray,
             tri
@@ -364,6 +418,8 @@ void main()
     {
         float weight = 1.0 / (float(frameNumber) + 2);
         color = 
+        // texture(previousFrame, (fragPosition.xy + 1.0) / 2) * (1-weight)
+        // + vec4(totalIncomingLight, 1.0) * weight
         texture(previousFrame, (fragPosition.xy + 1.0) / 2) * (1-weight)
         + vec4(totalIncomingLight, 1.0) * weight
         // texture(previousFrame, (fragPosition.xy + 1.0) / 2) * 0.001
