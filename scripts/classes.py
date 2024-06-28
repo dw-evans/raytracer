@@ -138,13 +138,14 @@ class Triangle(ByteableObject):
     def tobytes(self) -> bytes | bytearray:
         return (
             struct.pack(
-                "3f4x 3f4x 3f4x 3f4x 3f4x 3f4x",
+                "3f4x 3f4x 3f4x 3f4x 3f4x 3f i",
                 *self.posA.astype("f4"),
                 *self.posB.astype("f4"),
                 *self.posC.astype("f4"),
                 *self.normalA.astype("f4"),
                 *self.normalB.astype("f4"),
                 *self.normalC.astype("f4"),
+                self.parent.mesh_index,
             )
             + self.material.tobytes()
         )
@@ -198,22 +199,25 @@ class Triangle(ByteableObject):
 
 
 class Mesh(ByteableObject):
+    MESH_INDEX = 0
 
     def __init__(self) -> None:
         self.pos: Vector3 = Vector3((0.0, 0.0, 0.0))
         self.triangles: list[Triangle] = []
-
-        # self.orientation = Matrix44.identity()
-
         self.csys = Csys()
+        self.mesh_index = self.MESH_INDEX
+
+        self.MESH_INDEX += 1
 
     def tobytes(self) -> bytes | bytearray:
 
-        tri_bytes = b""
-        for tri in self.triangles:
-            tri_bytes += tri.tobytes()
-
-        return struct.pack("3f4x", self.pos.astype("f4")) + tri_bytes
+        bbox = self.bounding_box
+        return struct.pack(
+            "i12x 3f4x 3f4x",
+            self.mesh_index,
+            *bbox[0],
+            *bbox[1],
+        )
 
     # @property
     # def bounding_box(self) -> any:
@@ -246,8 +250,8 @@ class Mesh(ByteableObject):
             tris.append(
                 Triangle(
                     posA=v0,
-                    posB=v2,
-                    posC=v1,
+                    posB=v1,
+                    posC=v2,
                     normalA=normal,
                     normalB=normal,
                     normalC=normal,
@@ -258,37 +262,12 @@ class Mesh(ByteableObject):
         msh.add_tri(tris)
         return msh
 
-    def create_transformed_triangle(
-        self, tris: Triangle | list[Triangle]
-    ) -> Triangle | list[Triangle]:
-        raise Exception
-        if isinstance(tris, Iterable):
-            ret = []
-            for tri in tris:
-                t_copy = copy.deepcopy(tri)
-                for x in t_copy.positions:
-                    x += self.pos
-                ret.append(t_copy)
-        else:
-            tri = tris
-            t_copy = copy.deepcopy(tri)
-            for x in t_copy.positions:
-                x += self.pos
-
-        return ret
-
-    def to_bytes_with_transforms(self) -> bytes:
-        """Lazily writes the triangles in the mesh to bytes including the position of the
-        mesh centroid
-        TODO implement rotations etc to flex"""
-        raise NotImplementedError
-        ret = b""
-        # for every triangle, deepcopy then write to bytes
-        for t in self.triangles:
-            t_copy = copy.deepcopy(t)
-            for x in t_copy.positions:
-                x += self.pos
-            ret += t.tobytes()
+    @property
+    def bounding_box(self) -> pyrr.aabb:
+        pts = []
+        for tri in self.triangles:
+            pts += tri.positions
+        ret = pyrr.aabb.create_from_points(pts)
 
         return ret
 
@@ -413,13 +392,13 @@ class Csys:
 
 
 class Scene:
+
     def __init__(self) -> None:
         self.meshes: list[Mesh] = []
         self.spheres: list[Sphere] = []
         self.cam = Camera()
 
     def get_mesh_index(self, msh: Mesh) -> int:
-        raise Exception
         try:
             return self.meshes.index(msh)
         except:
@@ -432,7 +411,7 @@ class Scene:
         return count
 
     @property
-    def triangles(self) -> list[triangles]:
+    def triangles(self) -> list[Triangle]:
         ret = []
         for m in self.meshes:
             ret += m.triangles

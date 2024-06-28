@@ -1,4 +1,4 @@
-#version 430 core
+#version 460 core
 
 in vec3 fragPosition;
 out vec4 color;
@@ -14,12 +14,14 @@ uniform float time;
 
 const int SPHERES_COUNT_MAX = 256;
 const int TRIANGLES_COUNT_MAX = 455;
+const int MESHES_COUNT_MAX = 256;
 
 uniform int MAX_BOUNCES;
 uniform int RAYS_PER_PIXEL;
 
 uniform int spheresCount;
 uniform int triCount;
+uniform int meshCount;
 
 uniform sampler2D previousFrame;
 
@@ -60,68 +62,36 @@ struct Triangle
     vec3 normalA; // 12 + 4
     vec3 normalB; // 12 + 4
     vec3 normalC; // 12 + 4
+    int meshIndex; // 4 + 12
     Material material; // ...
 };
 
-// layout(std140) uniform triBuffer 
-// {
-//     Triangle triangles[TRIANGLES_COUNT_MAX];
-// };
 
-// layout(std140) uniform triBuffer 
-// {
-//     Triangle triangles[TRIANGLES_COUNT_MAX];
-// };
-
-
-layout(std140) uniform triBuffer0 
+layout(std140, binding=9) buffer triBuffer
 {
-    Triangle triangles0[TRIANGLES_COUNT_MAX];
+    Triangle triangles[TRIANGLES_COUNT_MAX];
 };
-layout(std140) uniform triBuffer1 
-{
-    Triangle triangles1[TRIANGLES_COUNT_MAX];
-};
-layout(std140) uniform triBuffer2 
-{
-    Triangle triangles2[TRIANGLES_COUNT_MAX];
-};
-layout(std140) uniform triBuffer3 
-{
-    Triangle triangles3[TRIANGLES_COUNT_MAX];
-};
-layout(std140) uniform triBuffer4 
-{
-    Triangle triangles4[TRIANGLES_COUNT_MAX];
-};
-
 
 Triangle getTriangle(int index)
+// legacy for implementation with multiple uniform buffers
 {
     Triangle ret;
-    if (index < TRIANGLES_COUNT_MAX)
-    {
-        ret = triangles0[index];
-    }
-    else if (index < TRIANGLES_COUNT_MAX * 2)
-    {
-        ret = triangles1[index - TRIANGLES_COUNT_MAX];
-    }
-    else if (index < TRIANGLES_COUNT_MAX * 3)
-    {
-        ret = triangles2[index - TRIANGLES_COUNT_MAX * 2];
-    }
-    else if (index < TRIANGLES_COUNT_MAX * 4)
-    {
-        ret = triangles3[index - TRIANGLES_COUNT_MAX * 3];
-    }
-    else if (index < TRIANGLES_COUNT_MAX * 5)
-    {
-        ret = triangles4[index - TRIANGLES_COUNT_MAX * 4];
-    }
-    return ret;
+
+    return triangles[index];
 }
 
+
+struct Mesh
+{
+    int index;
+    vec3 bboxMin;
+    vec3 bboxMax;
+};
+
+layout(std140) uniform meshBuffer 
+{
+    Mesh meshes[MESHES_COUNT_MAX];
+};
 
 
 struct Ray 
@@ -137,6 +107,7 @@ struct HitInfo
     vec3 hitPoint;
     vec3 normal;
     Material material;
+    int meshIndex;
 };
 
 
@@ -248,9 +219,10 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
         return hitInfo;
     }
 
-    hitInfo.normal = tri.normalA;
+    // hitInfo.normal = tri.normalA;
+    hitInfo.normal = N / float(length(N));
     hitInfo.didHit = true;
-    hitInfo.material = tri.material;
+    // hitInfo.material = tri.material;
     hitInfo.dst = t;
 
     return hitInfo;
@@ -260,6 +232,45 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
 
 // not sure what is going on here
 // seems like the triangle colliusion fails when dst is set to inf
+
+void swap(inout float a, inout float b) {
+    float temp = a;
+    a = b;
+    b = temp;
+}
+
+bool boundingBoxIntersect(Ray ray, vec3 bboxMin, vec3 bboxMax)
+{
+    // calculates the boolean intersection between a aabb and a ray
+    float tmin = (bboxMin.x - ray.origin.x) / ray.dir.x; 
+    float tmax = (bboxMax.x - ray.origin.x) / ray.dir.x; 
+
+    if (tmin > tmax) swap(tmin, tmax); 
+
+    float tymin = (bboxMin.y - ray.origin.y) / ray.dir.y; 
+    float tymax = (bboxMax.y - ray.origin.y) / ray.dir.y; 
+
+    if (tymin > tymax) swap(tymin, tymax); 
+
+    if ((tmin > tymax) || (tymin > tmax)) 
+        return false; 
+
+    if (tymin > tmin) tmin = tymin; 
+    if (tymax < tmax) tmax = tymax; 
+
+    float tzmin = (bboxMin.z - ray.origin.z) / ray.dir.z; 
+    float tzmax = (bboxMax.z - ray.origin.z) / ray.dir.z; 
+
+    if (tzmin > tzmax) swap(tzmin, tzmax); 
+
+    if ((tmin > tzmax) || (tzmin > tmax)) 
+        return false; 
+
+    if (tzmin > tmin) tmin = tzmin; 
+    if (tzmax < tmax) tmax = tzmax; 
+
+    return true; 
+}
 
 
 HitInfo calculateRayCollision(Ray ray)
@@ -284,9 +295,34 @@ HitInfo calculateRayCollision(Ray ray)
         }
     }
     // loop over all triangles in the scene
+
+    bool meshIntersectArray[MESHES_COUNT_MAX];
+
+    // determine which mesh indices are good
+    for (int j = 0; j < meshCount; j++)
+    {
+        // check if the ray intersects the bounding box
+        Mesh mesh = meshes[j];
+        bool intersectsBbox = boundingBoxIntersect(ray, mesh.bboxMin, mesh.bboxMax);
+        meshIntersectArray[j] = intersectsBbox;
+    }
+
     for (int i = 0; i < triCount; i++)
     {
         Triangle tri = getTriangle(i);
+
+        int triMeshIndex = tri.meshIndex;
+
+        for (int j = 0; j < meshCount; j++)
+        {
+            // if the ray isn't intersecting the bounding box of the triangle's mesh
+            // we will not perform the calculation
+            if (!meshIntersectArray[j])
+            {
+                break;
+            }
+        }
+
 
         HitInfo hitInfo = rayTriangle(
             ray,
@@ -399,7 +435,7 @@ void main()
     ray.origin = CamGlobalPos;
     ray.dir = normalize(viewPoint - ray.origin);
 
-    HitInfo hit = calculateRayCollision(ray);
+    // HitInfo hit = calculateRayCollision(ray);
 
     vec3 totalIncomingLight = vec3(0.0, 0.0, 0.0);
     for (int i = 0; i < RAYS_PER_PIXEL; i++)
@@ -409,7 +445,8 @@ void main()
 
     totalIncomingLight /= RAYS_PER_PIXEL;
 
-    // Triangle myTriangle = triangles[0];
+    Triangle triangle = getTriangle(0);
+    HitInfo hit = rayTriangle(ray, triangle);
 
     // HitInfo hit2 = rayTriangle2(ray, myTriangl2e);
     // the normal seems to work, but the hit info is not correctly detecting hits
@@ -418,6 +455,8 @@ void main()
 
     // HitInfo hit0 = rayTriangle(ray, triangles[0]);
     // HitInfo hit1 = rayTriangle(ray, triangles[1]);
+
+
 
     if (STATIC_RENDER)
     {
@@ -436,8 +475,8 @@ void main()
     else 
     {
         // color = vec4(0.5);
-        color = vec4(totalIncomingLight * 0.5, 1.0)
-        // + vec4(vec3(0.5), 0.5)
+        color = vec4(totalIncomingLight, 1.0)
+        // * 0.5 + vec4(vec3(abs(hit.normal)) * 0.5, 1.0)
         // + vec4(vec3(hit2.didHit), 1.0) * 0.5
         // + vec4(hit2.material.color) * 0.5
         ;
