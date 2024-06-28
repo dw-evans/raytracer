@@ -178,13 +178,11 @@ spheres = [
         material=material_plain_1,
     ),
     Sphere(
-        # pos=Vector3((0, 0, -30), dtype="f4"),
         pos=Vector3((2, 3, 4), dtype="f4"),
         radius=1,
         material=material_light_source_1,
     ),
     Sphere(
-        # pos=Vector3((0, 0, -30), dtype="f4"),
         pos=Vector3((-2, 3, 4), dtype="f4"),
         radius=1,
         material=material_light_source_1,
@@ -347,6 +345,12 @@ program["meshBuffer"].binding = mesh_buffer_binding
 # tri_ssbo = ctx.buffer(tri_bytes)
 # tri_ssbo.bind_to_storage_buffer(tri_buffer_binding)
 # program["triBuffer"].binding = tri_buffer_binding
+
+sky_color = Vector3((131, 200, 228), dtype="f4") / 255
+ground_color = Vector3((74, 112, 45), dtype="f4") / 255
+
+program["skyColor"].write(struct.pack("3f", *sky_color))
+# program["groundColor"].write(struct.pack("3f", *ground_color))
 
 
 frame_counter = 0

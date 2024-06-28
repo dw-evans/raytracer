@@ -29,6 +29,9 @@ uniform uint frameNumber;
 
 uniform bool STATIC_RENDER;
 
+uniform vec3 skyColor;
+uniform vec3 groundColor;
+
 float inf = 1.0 / 0.0;
 float pi = 3.14159265359;
 
@@ -152,6 +155,15 @@ HitInfo raySphere(Ray ray, vec3 spherePos, float sphereRadius)
         }
     }
     return hitInfo;
+}
+
+
+vec3 getEnvironmentLight(Ray ray)
+{
+    // float skyGradientT = pow(smoothstep(0, 0.4, ray.dir.y), 0.35)
+    // vec3 skyGradient = mix(skyColor, )
+
+    return skyColor;
 }
 
 HitInfo rayTriangle(Ray ray, Triangle tri)
@@ -408,6 +420,7 @@ vec3 traceRay(Ray ray, inout uint rngState)
 
         } else 
         {
+            incomingLight += getEnvironmentLight(ray) * rayColor;
             break;
         }
     }
