@@ -14,8 +14,7 @@ uniform float time;
 
 const int SPHERES_COUNT_MAX = 256;
 const int TRIANGLES_COUNT_MAX = 455;
-float inf = 1.0 / 0.0;
-float pi = 3.14159265359;
+
 uniform int MAX_BOUNCES;
 uniform int RAYS_PER_PIXEL;
 
@@ -27,6 +26,9 @@ uniform sampler2D previousFrame;
 uniform uint frameNumber;
 
 uniform bool STATIC_RENDER;
+
+float inf = 1.0 / 0.0;
+float pi = 3.14159265359;
 
 struct Material
 {
@@ -120,6 +122,8 @@ Triangle getTriangle(int index)
     return ret;
 }
 
+
+
 struct Ray 
 {
     vec3 origin;
@@ -194,7 +198,6 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
     vec3 v0v2 = v2 - v0;
 
     vec3 N = cross(v0v1, v0v2);
-
 
     float kEpsilon = 1e-6;
     float NDotRayDirection = dot(N, dir);
@@ -299,6 +302,8 @@ HitInfo calculateRayCollision(Ray ray)
 
     return closestHit;
 }
+
+// TODO find a better implementation of a random number generator.
 
 float randomValue(inout uint state) 
 {
