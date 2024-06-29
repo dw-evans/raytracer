@@ -34,6 +34,9 @@ from scripts.classes import (
     Ray,
 )
 
+import threading
+import queue
+
 from scripts.functions import (
     iter_to_bytes,
     buffer_to_image_float16,
@@ -53,16 +56,16 @@ os.chdir(Path(__file__).parent)
 
 PROGRAM = ShaderProgram.RAYTRACER
 
-WINDOW_HEIGHT = 540
+WINDOW_HEIGHT = 270
 ASPECT_RATIO = 16.0 / 9.0
 SCALE_FACTOR = 1
 
 STATIC_RENDER = False
 STATIC_RENDER_ANIMATION = False
 
-DYNAMIC_RENDER_FRAMERATE = 24
+DYNAMIC_RENDER_FRAMERATE = 1
 
-MAX_RAY_BOUNCES = 4
+MAX_RAY_BOUNCES = 2
 RAYS_PER_PIXEL = 1
 
 STATIC_RENDER_FRAMERATE = 144
@@ -91,27 +94,7 @@ cam.aspect = ASPECT_RATIO
 
 h = WINDOW_HEIGHT
 w = int(h * cam.aspect)
-pygame.init()
 
-screen = pygame.display.set_mode(
-    (w * SCALE_FACTOR, h * SCALE_FACTOR),
-    pygame.OPENGL | pygame.DOUBLEBUF,
-)
-clock = pygame.time.Clock()
-
-
-with open(f"shaders/{PROGRAM}.fs.glsl") as f:
-    shader_fragment = f.read()
-
-with open(f"shaders/{PROGRAM}.vs.glsl") as f:
-    shader_vertex = f.read()
-
-ctx = moderngl.create_context()
-
-program = ctx.program(
-    vertex_shader=shader_vertex,
-    fragment_shader=shader_fragment,
-)
 
 vertices = np.array(
     [
@@ -238,305 +221,335 @@ msh2 = Mesh.from_stl(
 scene.meshes.append(msh2)
 msh2.csys.tp(Vector3((2, 0.0, 8.0)))
 msh2.csys.Rzg(90)
-
-
-buffer1 = ctx.buffer(vertices.tobytes())
-
-vao = ctx.vertex_array(
-    program,
-    [
-        (buffer1, "3f", "position"),
-    ],
-)
-
 SELECTED_MESH_ID = -1
 
-if PROGRAM == ShaderProgram.RAYTRACER:
-    program["STATIC_RENDER"].write(struct.pack("i", STATIC_RENDER))
-    program["MAX_BOUNCES"].write(struct.pack("i", MAX_RAY_BOUNCES))
-    program["RAYS_PER_PIXEL"].write(struct.pack("i", RAYS_PER_PIXEL))
 
-    texture = ctx.texture((w, h), 3)
-    texture.use(location=1)
-    program["previousFrame"] = 1
-    render_data = b"\x00" * w * h * 3
+modification_waiting = False
 
-    # initialise the uniforms
-    program["screenWidth"].write(struct.pack("i", w))
-    program["screenHeight"].write(struct.pack("i", h))
 
-    program["spheresCount"].write(struct.pack("i", len(spheres)))
-    sphere_buffer_binding = 1
-    program["sphereBuffer"].binding = sphere_buffer_binding
+def main_loop():
+    global SELECTED_MESH_ID
+    global triangles_ssbo
+    global ctx
+    global modification_waiting
+    global modify_command
 
-    # cam.pos.z += -4
-    # cam.csys.pos.z += -4
+    pygame.init()
 
-    triangles = scene.triangles
-    n_triangles = len(triangles)
-    program["triCount"].write(struct.pack("i", n_triangles))
-
-    program["meshCount"].write(struct.pack("i", len(scene.meshes)))
-
-    # tri_buffer_length_max = 455
-
-    triangles_ssbo = ctx.buffer(
-        iter_to_bytes(
-            [t.update_pos_with_mesh2() for t in scene.triangles],
-        )
+    screen = pygame.display.set_mode(
+        (w * SCALE_FACTOR, h * SCALE_FACTOR),
+        pygame.OPENGL | pygame.DOUBLEBUF,
     )
-    triangles_ssbo_binding = 9
-    triangles_ssbo.bind_to_storage_buffer(binding=triangles_ssbo_binding)
-    # program["triBuffer"].binding = triangles_ssbo_binding
+    clock = pygame.time.Clock()
 
-    mesh_buffer = ctx.buffer(iter_to_bytes(scene.meshes))
-    mesh_buffer_binding = 10
-    program["meshBuffer"].binding = mesh_buffer_binding
-    mesh_buffer.bind_to_uniform_block(mesh_buffer_binding)
+    with open(f"shaders/{PROGRAM}.fs.glsl") as f:
+        shader_fragment = f.read()
 
-    sky_color = Vector3((131, 200, 228), dtype="f4") / 255
-    ground_color = Vector3((74, 112, 45), dtype="f4") / 255
+    with open(f"shaders/{PROGRAM}.vs.glsl") as f:
+        shader_vertex = f.read()
 
-    program["skyColor"].write(struct.pack("3f", *sky_color))
+    ctx = moderngl.create_context()
 
-    material_buffer = ctx.buffer(iter_to_bytes([highlight_material]))
-    material_buffer_binding = 11
-    program["materialBuffer"].binding = material_buffer_binding
-    material_buffer.bind_to_uniform_block(material_buffer_binding)
-
-
-elif PROGRAM == ShaderProgram.DUMB:
-    # program["STATIC_RENDER"].write(struct.pack("i", STATIC_RENDER))
-    # program["MAX_BOUNCES"].write(struct.pack("i", MAX_RAY_BOUNCES))
-    # program["RAYS_PER_PIXEL"].write(struct.pack("i", RAYS_PER_PIXEL))
-
-    # texture = ctx.texture((w, h), 3)
-    # texture.use(location=1)
-    # program["previousFrame"] = 1
-    # render_data = b"\x00" * w * h * 3
-
-    # initialise the uniforms
-    # program["screenWidth"].write(struct.pack("i", w))
-    # program["screenHeight"].write(struct.pack("i", h))
-
-    program["spheresCount"].write(struct.pack("i", len(spheres)))
-    sphere_buffer_binding = 1
-    program["sphereBuffer"].binding = sphere_buffer_binding
-
-    # cam.pos.z += -4
-    # cam.csys.pos.z += -4
-
-    triangles = scene.triangles
-    n_triangles = len(triangles)
-    program["triCount"].write(struct.pack("i", n_triangles))
-
-    program["meshCount"].write(struct.pack("i", len(scene.meshes)))
-
-    # tri_buffer_length_max = 455
-
-    triangles_ssbo = ctx.buffer(
-        iter_to_bytes(
-            [t.update_pos_with_mesh2() for t in scene.triangles],
-        )
+    program = ctx.program(
+        vertex_shader=shader_vertex,
+        fragment_shader=shader_fragment,
     )
-    triangles_ssbo_binding = 9
-    triangles_ssbo.bind_to_storage_buffer(binding=triangles_ssbo_binding)
-    # program["triBuffer"].binding = triangles_ssbo_binding
 
-    mesh_buffer = ctx.buffer(iter_to_bytes(scene.meshes))
-    mesh_buffer_binding = 10
-    program["meshBuffer"].binding = mesh_buffer_binding
-    # mesh_buffer.bind_to_uniform_block(mesh_buffer_binding)
+    buffer1 = ctx.buffer(vertices.tobytes())
 
-    sky_color = Vector3((131, 200, 228), dtype="f4") / 255
-    ground_color = Vector3((74, 112, 45), dtype="f4") / 255
+    vao = ctx.vertex_array(
+        program,
+        [
+            (buffer1, "3f", "position"),
+        ],
+    )
 
-    program["skyColor"].write(struct.pack("3f", *sky_color))
+    if PROGRAM == ShaderProgram.RAYTRACER:
+        program["STATIC_RENDER"].write(struct.pack("i", STATIC_RENDER))
+        program["MAX_BOUNCES"].write(struct.pack("i", MAX_RAY_BOUNCES))
+        program["RAYS_PER_PIXEL"].write(struct.pack("i", RAYS_PER_PIXEL))
 
+        texture = ctx.texture((w, h), 3)
+        texture.use(location=1)
+        program["previousFrame"] = 1
+        render_data = b"\x00" * w * h * 3
 
-frame_counter = 0
-cycle_counter = 0
-shader_rng_counter = 0
+        # initialise the uniforms
+        program["screenWidth"].write(struct.pack("i", w))
+        program["screenHeight"].write(struct.pack("i", h))
 
-running = True
-pygame.event.set_grab(False)
-pygame.mouse.set_visible(True)
+        program["spheresCount"].write(struct.pack("i", len(spheres)))
+        sphere_buffer_binding = 1
+        program["sphereBuffer"].binding = sphere_buffer_binding
 
-mouse_sphere = spheres[-1]
-if not STATIC_RENDER_ANIMATION:
-    try:
-        while running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-                    pygame.quit()
-                    sys.exit()
+        # cam.pos.z += -4
+        # cam.csys.pos.z += -4
 
-                if KEYBOARD_ENABLED:
-                    SPEED = 2.0
-                    key_state = pygame.key.get_pressed()
-                    if key_state[pygame.K_w]:
-                        cam.csys.pos.z += 1 / DYNAMIC_RENDER_FRAMERATE * SPEED
-                    if key_state[pygame.K_s]:
-                        cam.csys.pos.z += -1 / DYNAMIC_RENDER_FRAMERATE * SPEED
-                    if key_state[pygame.K_d]:
-                        cam.csys.pos.x += -1 / DYNAMIC_RENDER_FRAMERATE * SPEED
-                    if key_state[pygame.K_a]:
-                        cam.csys.pos.x += 1 / DYNAMIC_RENDER_FRAMERATE * SPEED
-                    if key_state[pygame.K_q]:
-                        cam.csys.pos.z += -1 / DYNAMIC_RENDER_FRAMERATE * SPEED
-                    if key_state[pygame.K_e]:
-                        cam.csys.pos.z += -1 / DYNAMIC_RENDER_FRAMERATE * SPEED
+        triangles = scene.triangles
+        n_triangles = len(triangles)
+        program["triCount"].write(struct.pack("i", n_triangles))
 
-                mouse_x, mouse_y = pygame.mouse.get_pos()
-                print(mouse_x, mouse_y)
+        program["meshCount"].write(struct.pack("i", len(scene.meshes)))
 
-                mouse_ray = convert_screen_coords_to_camera_ray(
-                    mouse_x,
-                    mouse_y,
-                    screen.get_width(),
-                    screen.get_height(),
-                    cam=scene.cam,
-                )
+        # tri_buffer_length_max = 455
 
-                hits = rayScene(mouse_ray, scene)
-                hits = [h for h in hits if isinstance(h[1], Triangle)]
-                if hits:
-                    print(
-                        f"n_hits={len(hits)}, {', '.join((str(type(x[1])) for x in hits))}"
+        triangles_ssbo = ctx.buffer(
+            iter_to_bytes(
+                [t.update_pos_with_mesh2() for t in scene.triangles],
+            )
+        )
+        triangles_ssbo_binding = 9
+        triangles_ssbo.bind_to_storage_buffer(binding=triangles_ssbo_binding)
+        # program["triBuffer"].binding = triangles_ssbo_binding
+
+        mesh_buffer = ctx.buffer(iter_to_bytes(scene.meshes))
+        mesh_buffer_binding = 10
+        program["meshBuffer"].binding = mesh_buffer_binding
+        mesh_buffer.bind_to_uniform_block(mesh_buffer_binding)
+
+        sky_color = Vector3((131, 200, 228), dtype="f4") / 255
+        ground_color = Vector3((74, 112, 45), dtype="f4") / 255
+
+        program["skyColor"].write(struct.pack("3f", *sky_color))
+
+        material_buffer = ctx.buffer(iter_to_bytes([highlight_material]))
+        material_buffer_binding = 11
+        program["materialBuffer"].binding = material_buffer_binding
+        material_buffer.bind_to_uniform_block(material_buffer_binding)
+
+    elif PROGRAM == ShaderProgram.DUMB:
+        # program["STATIC_RENDER"].write(struct.pack("i", STATIC_RENDER))
+        # program["MAX_BOUNCES"].write(struct.pack("i", MAX_RAY_BOUNCES))
+        # program["RAYS_PER_PIXEL"].write(struct.pack("i", RAYS_PER_PIXEL))
+
+        # texture = ctx.texture((w, h), 3)
+        # texture.use(location=1)
+        # program["previousFrame"] = 1
+        # render_data = b"\x00" * w * h * 3
+
+        # initialise the uniforms
+        # program["screenWidth"].write(struct.pack("i", w))
+        # program["screenHeight"].write(struct.pack("i", h))
+
+        program["spheresCount"].write(struct.pack("i", len(spheres)))
+        sphere_buffer_binding = 1
+        program["sphereBuffer"].binding = sphere_buffer_binding
+
+        # cam.pos.z += -4
+        # cam.csys.pos.z += -4
+
+        triangles = scene.triangles
+        n_triangles = len(triangles)
+        program["triCount"].write(struct.pack("i", n_triangles))
+
+        program["meshCount"].write(struct.pack("i", len(scene.meshes)))
+
+        # tri_buffer_length_max = 455
+
+        triangles_ssbo = ctx.buffer(
+            iter_to_bytes(
+                [t.update_pos_with_mesh2() for t in scene.triangles],
+            )
+        )
+        triangles_ssbo_binding = 9
+        triangles_ssbo.bind_to_storage_buffer(binding=triangles_ssbo_binding)
+        # program["triBuffer"].binding = triangles_ssbo_binding
+
+        mesh_buffer = ctx.buffer(iter_to_bytes(scene.meshes))
+        mesh_buffer_binding = 10
+        program["meshBuffer"].binding = mesh_buffer_binding
+        mesh_buffer.bind_to_uniform_block(mesh_buffer_binding)
+
+        sky_color = Vector3((131, 200, 228), dtype="f4") / 255
+        ground_color = Vector3((74, 112, 45), dtype="f4") / 255
+
+        program["skyColor"].write(struct.pack("3f", *sky_color))
+
+    frame_counter = 0
+    cycle_counter = 0
+    shader_rng_counter = 0
+
+    pygame.event.set_grab(False)
+    pygame.mouse.set_visible(True)
+
+    mouse_sphere = spheres[-1]
+
+    running = True
+    if not STATIC_RENDER_ANIMATION:
+        try:
+            while running:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        running = False
+                        pygame.quit()
+                        sys.exit()
+
+                    if KEYBOARD_ENABLED:
+                        SPEED = 2.0
+                        key_state = pygame.key.get_pressed()
+                        if key_state[pygame.K_w]:
+                            cam.csys.pos.z += 1 / DYNAMIC_RENDER_FRAMERATE * SPEED
+                        if key_state[pygame.K_s]:
+                            cam.csys.pos.z += -1 / DYNAMIC_RENDER_FRAMERATE * SPEED
+                        if key_state[pygame.K_d]:
+                            cam.csys.pos.x += -1 / DYNAMIC_RENDER_FRAMERATE * SPEED
+                        if key_state[pygame.K_a]:
+                            cam.csys.pos.x += 1 / DYNAMIC_RENDER_FRAMERATE * SPEED
+                        if key_state[pygame.K_q]:
+                            cam.csys.pos.z += -1 / DYNAMIC_RENDER_FRAMERATE * SPEED
+                        if key_state[pygame.K_e]:
+                            cam.csys.pos.z += -1 / DYNAMIC_RENDER_FRAMERATE * SPEED
+
+                    mouse_x, mouse_y = pygame.mouse.get_pos()
+                    # print(mouse_x, mouse_y)
+
+                    mouse_ray = convert_screen_coords_to_camera_ray(
+                        mouse_x,
+                        mouse_y,
+                        screen.get_width(),
+                        screen.get_height(),
+                        cam=scene.cam,
                     )
-                    mouse_sphere.pos = hits[0][2]
 
-                if event.type == pygame.MOUSEBUTTONDOWN:
+                    hits = rayScene(mouse_ray, scene)
+                    hits = [h for h in hits if isinstance(h[1], Triangle)]
                     if hits:
-                        obj = hits[0][1]
-                        if isinstance(obj, Triangle):
-                            SELECTED_MESH_ID = obj.parent.mesh_index
+                        # print(
+                        #     f"n_hits={len(hits)}, {', '.join((str(type(x[1])) for x in hits))}"
+                        # )
+                        mouse_sphere.pos = hits[0][2]
+
+                    if event.type == pygame.MOUSEBUTTONDOWN:
+                        if hits:
+                            obj = hits[0][1]
+                            if isinstance(obj, Triangle):
+                                SELECTED_MESH_ID = obj.parent.mesh_index
+                                program["selectedMeshId"].write(
+                                    struct.pack("i", SELECTED_MESH_ID)
+                                )
+                                # print(f"selectedMeshId = {SELECTED_MESH_ID}")
+                        else:
+                            SELECTED_MESH_ID = -1
                             program["selectedMeshId"].write(
                                 struct.pack("i", SELECTED_MESH_ID)
                             )
-                            print(f"selectedMeshId = {SELECTED_MESH_ID}")
-                    else:
-                        SELECTED_MESH_ID = -1
-                        program["selectedMeshId"].write(
-                            struct.pack("i", SELECTED_MESH_ID)
-                        )
-                        print(f"selectedMeshId = {SELECTED_MESH_ID}")
 
-            if STATIC_RENDER:
-                time = 0
-            else:
-                time = pygame.time.get_ticks() / np.float32(1000.0)
+                            # print(f"selectedMeshId = {SELECTED_MESH_ID}")
 
-            if PROGRAM == ShaderProgram.RAYTRACER:
-                program["frameNumber"].write(struct.pack("I", shader_rng_counter))
+                if STATIC_RENDER:
+                    time = 0
+                else:
+                    time = pygame.time.get_ticks() / np.float32(1000.0)
 
-            program["ViewParams"].write(cam.view_params.astype("f4"))
-            program["CamLocalToWorldMatrix"].write(
-                cam.local_to_world_matrix.astype("f4")
-            )
-            program["CamGlobalPos"].write(cam.csys.pos.astype("f4"))
+                if PROGRAM == ShaderProgram.RAYTRACER:
+                    program["frameNumber"].write(struct.pack("I", shader_rng_counter))
 
-            sphere_bytes = iter_to_bytes(spheres)
-            sphere_buffer = ctx.buffer(sphere_bytes)
-            sphere_buffer.bind_to_uniform_block(sphere_buffer_binding)
+                program["ViewParams"].write(cam.view_params.astype("f4"))
+                program["CamLocalToWorldMatrix"].write(
+                    cam.local_to_world_matrix.astype("f4")
+                )
+                program["CamGlobalPos"].write(cam.csys.pos.astype("f4"))
 
-            # tri_bytes = iter_to_bytes(triangles)
-            # tri_buffer = ctx.buffer(tri_bytes)
-            # tri_buffer.bind_to_uniform_block(tri_buffer_binding)
+                sphere_bytes = iter_to_bytes(spheres)
+                sphere_buffer = ctx.buffer(sphere_bytes)
+                sphere_buffer.bind_to_uniform_block(sphere_buffer_binding)
 
-            vao.render(mode=moderngl.TRIANGLE_STRIP)
+                # tri_bytes = iter_to_bytes(triangles)
+                # tri_buffer = ctx.buffer(tri_bytes)
+                # tri_buffer.bind_to_uniform_block(tri_buffer_binding)
 
-            if PROGRAM == ShaderProgram.RAYTRACER:
-                render_data = ctx.screen.read(components=3, dtype="f1")
-                texture.write(render_data)
+                if modification_waiting:
+                    modify_command()
+                    modification_waiting = False
+                
 
-            shader_rng_counter += 1
-            cycle_counter += 1
+                pass
+                # triangles_ssbo_binding = 9
+                # triangles_ssbo.bind_to_storage_buffer(binding=triangles_ssbo_binding)
 
-            pygame.display.flip()
-            clock.tick(DYNAMIC_RENDER_FRAMERATE)
+                vao.render(mode=moderngl.TRIANGLE_STRIP)
 
+                if PROGRAM == ShaderProgram.RAYTRACER:
+                    render_data = ctx.screen.read(components=3, dtype="f1")
+                    texture.write(render_data)
+
+                shader_rng_counter += 1
+                cycle_counter += 1
+
+                pygame.display.flip()
+                clock.tick(DYNAMIC_RENDER_FRAMERATE)
+
+                pass
+
+            # extract the image
+            render_data2 = ctx.screen.read(components=3, dtype="f2")
+            img = buffer_to_image_float16(render_data2, (w, h))
+            # save the image to the renders folder
+            img.save(dir_render / f"{frame_counter:05}.png")
+
+            shader_rng_counter = 0
+            cycle_counter = 0
+
+        except KeyboardInterrupt:
             pass
 
-        # extract the image
-        render_data2 = ctx.screen.read(components=3, dtype="f2")
-        img = buffer_to_image_float16(render_data2, (w, h))
-        # save the image to the renders folder
-        img.save(dir_render / f"{frame_counter:05}.png")
-
-        shader_rng_counter = 0
-        cycle_counter = 0
-
-    except KeyboardInterrupt:
-        pass
 
 
-elif STATIC_RENDER and STATIC_RENDER_ANIMATION:
-    try:
-        """
-        ffmpeg build details here
-        "C:\Program Files\GNU Octave\Octave-6.4.0\mingw64\bin\ffmpeg.exe" -r 24 -i %06d.png -vf "fps=24,format=yuv420p" output.mp4
-        """
-        while running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
+def listener_loop():
+    global SELECTED_MESH_ID
+    global triangles_ssbo
+    global ctx
+    global modify_command
+    global modification_waiting
 
-            time = frame_counter * (dt + 1)
+    import regex as re
 
-            program["frameNumber"].write(struct.pack("I", shader_rng_counter))
+    valid_methods = dir(Csys)
 
-            program["ViewParams"].write(cam.view_params.astype("f4"))
-            program["CamLocalToWorldMatrix"].write(
-                cam.local_to_world_matrix.astype("f4")
+    while True:
+
+        command = input("Enter your command")
+
+        print(f"selected index = {SELECTED_MESH_ID}")
+        print([m.mesh_index for m in scene.meshes])
+
+        try:
+            msh: Mesh = [m for m in scene.meshes if m.mesh_index == SELECTED_MESH_ID][0]
+        except IndexError:
+            print("Mesh not valid")
+            continue
+
+        match = re.match(r"(\w*\D)(?:\s*)((?:\d+)(?:.\d*))", command)
+
+        if not match:
+            continue
+
+        if not match.group(1).capitalize() in valid_methods:
+            continue
+
+        print(f"modifying mesh with command `{command}`")
+
+        msh.csys.__getattribute__(match.group(1).capitalize())(float(match.group(2)))
+
+
+
+        modify_command = lambda: triangles_ssbo.write(
+            iter_to_bytes(
+                [t.update_pos_with_mesh2() for t in scene.triangles],
             )
-            program["CamGlobalPos"].write(cam.pos.astype("f4"))
+        )
+        modification_waiting = True
 
-            sp1.pos.x = 0 + 3 * sin(time / 3)
-            sp1.pos.y = 2.0
-            sp1.pos.z = 6.0 + 3 * sin(time / 3)
-
-            sphere_bytes = iter_to_bytes(spheres)
-            sphere_buffer = ctx.buffer(sphere_bytes)
-            sphere_buffer.bind_to_uniform_block(sphere_buffer_binding)
-
-            tri_bytes = iter_to_bytes(triangles)
-            tri_buffer = ctx.buffer(tri_bytes)
-            tri_buffer.bind_to_uniform_block(tri_buffer_binding)
-
-            vao.render(mode=moderngl.TRIANGLE_STRIP)
-
-            render_data = ctx.screen.read(components=3, dtype="f1")
-            texture.write(render_data)
-
-            shader_rng_counter += 1
-            cycle_counter += 1
-
-            pygame.display.flip()
-
-            if cycle_counter > STATIC_RENDER_CYCLES_PER_FRAME:
-                # extract the image
-                render_data2 = ctx.screen.read(components=3, dtype="f2")
-                # img = buffer_to_image_float16(render_data2, (w, h))
-                img = buffer_to_image(render_data, (w, h))
-                # save the image to the renders folder
-                img.save(dir_render / f"{frame_counter:06}.png")
-                # reset the seed
-                shader_rng_counter = 0
-                # reset the cycle counter
-                cycle_counter = 0
-                # reset the texture for the next frame... maybe
-
-                frame_counter += 1
-
-            if frame_counter > n_frames:
-                print("Render complete")
-                running = False
-
-        pygame.quit()
-
-    except KeyboardInterrupt:
         pass
-    finally:
-        sys.exit()
+
+
+def main():
+    t1 = threading.Thread(target=main_loop)
+    t2 = threading.Thread(target=listener_loop)
+
+    t1.start()
+    t2.start()
+
+
+if __name__ == "__main__":
+    main()

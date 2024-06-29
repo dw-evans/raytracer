@@ -175,17 +175,17 @@ class Triangle(ByteableObject):
 
         self.posA = Vector3(
             pyrr.matrix44.apply_to_vector(
-                self.parent.csys.transformation_matrix, self.posA
+                self.parent.csys.transformation_matrix, self.posA0
             )
         )
         self.posB = Vector3(
             pyrr.matrix44.apply_to_vector(
-                self.parent.csys.transformation_matrix, self.posB
+                self.parent.csys.transformation_matrix, self.posB0
             )
         )
         self.posC = Vector3(
             pyrr.matrix44.apply_to_vector(
-                self.parent.csys.transformation_matrix, self.posC
+                self.parent.csys.transformation_matrix, self.posC0
             )
         )
 
