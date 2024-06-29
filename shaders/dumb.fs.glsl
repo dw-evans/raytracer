@@ -13,11 +13,8 @@ uniform vec3 CamGlobalPos;
 uniform float time;
 
 const int SPHERES_COUNT_MAX = 256;
-const int TRIANGLES_COUNT_MAX = 455;
+const int TRIANGLES_COUNT_MAX = 16384;
 const int MESHES_COUNT_MAX = 256;
-
-uniform int MAX_BOUNCES;
-uniform int RAYS_PER_PIXEL;
 
 uniform int spheresCount;
 uniform int triCount;
@@ -32,8 +29,6 @@ uniform bool STATIC_RENDER;
 uniform vec3 skyColor;
 uniform vec3 groundColor;
 
-uniform int selectedMeshId;
-
 float inf = 1.0 / 0.0;
 float pi = 3.14159265359;
 
@@ -43,13 +38,6 @@ struct Material
     vec3 emissionColor; // 12
     float emissionStrength; // 4
     float smoothness; // 4 + 12
-};
-
-// uniform Material highlightMaterial;#
-
-layout(std140) uniform materialBuffer
-{
-    Material highlightMaterials[4];
 };
 
 struct Sphere
@@ -62,6 +50,7 @@ struct Sphere
 // layout(std140)
 layout(std140) uniform sphereBuffer 
 {
+    // int spheresCount; // I cannot figure out how to get this to work
     Sphere spheres[SPHERES_COUNT_MAX];
 };
 
@@ -168,9 +157,6 @@ HitInfo raySphere(Ray ray, vec3 spherePos, float sphereRadius)
 
 vec3 getEnvironmentLight(Ray ray)
 {
-    // float skyGradientT = pow(smoothstep(0, 0.4, ray.dir.y), 0.35)
-    // vec3 skyGradient = mix(skyColor, )
-
     return skyColor;
 }
 
@@ -249,9 +235,6 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
 
 }
 
-
-// not sure what is going on here
-// seems like the triangle colliusion fails when dst is set to inf
 
 void swap(inout float a, inout float b) {
     float temp = a;
@@ -352,24 +335,12 @@ HitInfo calculateRayCollision(Ray ray)
         if (hitInfo.didHit && hitInfo.dst < closestHit.dst)
         {
             closestHit = hitInfo;
-            
-            if (triMeshIndex == selectedMeshId)
-            {
-                closestHit.material = highlightMaterials[0];
-            }
-            else
-            {
-                closestHit.material = tri.material;
-            }
-
-            
+            closestHit.material = tri.material;
         }
     }
 
     return closestHit;
 }
-
-// TODO find a better implementation of a random number generator.
 
 float randomValue(inout uint state) 
 {
@@ -399,45 +370,25 @@ vec3 randomDirectionHemisphere(vec3 normal, inout uint rngState)
     return sign(dot(randomDir, normal)) * randomDir;
 }
 
-
-
-// I am reading somethign wile about needing to flip the camera if triangles are modelled in a CW arrangement
-// because this reverses the normals. Not sure how ti changes the position of the triangle...
-
-// https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution.html
-
-
-vec3 traceRay(Ray ray, inout uint rngState)
+vec3 traceRay(Ray ray)
 {
 
     vec3 incomingLight = vec3(0.0, 0.0, 0.0);
     vec3 rayColor = vec3(1.0,1.0,1.0);
 
-    for (int i = 0; i <= MAX_BOUNCES; i++)
+    HitInfo hitInfo = calculateRayCollision(ray);
+    if (hitInfo.didHit)
     {
-        HitInfo hitInfo = calculateRayCollision(ray);
-        if (hitInfo.didHit)
-        {
-            ray.origin = hitInfo.hitPoint;
+        ray.origin = hitInfo.hitPoint;
+        Material material = hitInfo.material;
+        vec3 emittedLight = material.emissionColor * material.emissionStrength;
+        incomingLight += material.color.xyz
+        * mix(vec3(0.4), vec3(1.2), hitInfo.normal.y / 2.0 + 0.5)
+        ;
 
-            // Material material = hitInfo.material;
-            Material material = hitInfo.material;
-
-            vec3 diffuseDir = normalize(hitInfo.normal + randomDirection(rngState));
-            vec3 specularDir = reflect(ray.dir, hitInfo.normal);
-
-            ray.dir = mix(diffuseDir, specularDir, material.smoothness);
-
-            vec3 emittedLight = material.emissionColor * material.emissionStrength;
-
-            incomingLight += emittedLight * rayColor;
-            rayColor *= material.color.xyz;
-
-        } else 
-        {
-            incomingLight += getEnvironmentLight(ray) * rayColor;
-            break;
-        }
+    } else 
+    {
+        incomingLight += getEnvironmentLight(ray) * rayColor;
     }
 
     return incomingLight;
@@ -447,47 +398,22 @@ vec3 traceRay(Ray ray, inout uint rngState)
 
 void main() 
 {
-
-    uint numPixels = screenWidth * screenHeight;
-    vec4 pxCoord = gl_FragCoord;
-    uint pxId = uint(pxCoord.x * screenWidth * screenHeight) + uint(pxCoord.y * screenHeight);
-    uint rngState = pxId + frameNumber;
-
-    // calculate the camere bits
     vec3 viewPointLocal = (vec3(fragPosition.xy / 2.0, 1) * ViewParams);
     vec3 viewPoint = (CamLocalToWorldMatrix * vec4(viewPointLocal.xyz, 1.0)).xyz;
 
-    // Btw we can just interpolate the ray direction from the vertex shader.
     Ray ray;
     ray.origin = CamGlobalPos;
     ray.dir = normalize(viewPoint - ray.origin);
 
-    vec3 totalIncomingLight = vec3(0.0, 0.0, 0.0);
-    for (int i = 0; i < RAYS_PER_PIXEL; i++)
-    {
-        totalIncomingLight += traceRay(ray, rngState);
-    }
 
-    totalIncomingLight /= RAYS_PER_PIXEL;
+    vec3 totalIncomingLight = traceRay(ray);
 
     Triangle triangle = getTriangle(0);
     HitInfo hit = rayTriangle(ray, triangle);
 
-
-    if (STATIC_RENDER)
-    {
-        float weight = 1.0 / (float(frameNumber) + 2);
-        color = 
-        texture(previousFrame, (fragPosition.xy + 1.0) / 2) * (1-weight)
-        + vec4(totalIncomingLight, 1.0) * weight
-        ;
-    }
-    else 
-    {
-        color = vec4(totalIncomingLight, 1.0)
-        ;
-    }
-
+    color = vec4(totalIncomingLight, 1.0)
+    ;
+    
 }
 
 

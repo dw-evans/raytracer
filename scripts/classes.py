@@ -20,8 +20,8 @@ class HitInfo:
 
 class Ray:
     def __init__(self) -> None:
-        self.origin = np.array([0.0, 0.0, 0.0])
-        self.dir = np.array([0.0, 0.0, 0.0])
+        self.origin: Vector3 = Vector3((0.0, 0.0, 0.0))
+        self.dir = Vector3((0.0, 0.0, 0.0))
 
 
 class ByteableObject(Protocol):
@@ -173,14 +173,20 @@ class Triangle(ByteableObject):
         # self.posB = self.posB0 + vec
         # self.posC = self.posC0 + vec
 
-        self.posA = pyrr.matrix44.apply_to_vector(
-            self.parent.csys.transformation_matrix, self.posA
+        self.posA = Vector3(
+            pyrr.matrix44.apply_to_vector(
+                self.parent.csys.transformation_matrix, self.posA
+            )
         )
-        self.posB = pyrr.matrix44.apply_to_vector(
-            self.parent.csys.transformation_matrix, self.posB
+        self.posB = Vector3(
+            pyrr.matrix44.apply_to_vector(
+                self.parent.csys.transformation_matrix, self.posB
+            )
         )
-        self.posC = pyrr.matrix44.apply_to_vector(
-            self.parent.csys.transformation_matrix, self.posC
+        self.posC = Vector3(
+            pyrr.matrix44.apply_to_vector(
+                self.parent.csys.transformation_matrix, self.posC
+            )
         )
 
         return self
@@ -199,6 +205,7 @@ class Triangle(ByteableObject):
 
 
 class Mesh(ByteableObject):
+    # an arbitrary counter that keeps a UID for each mesh
     MESH_INDEX = 0
 
     def __init__(self) -> None:
@@ -207,7 +214,7 @@ class Mesh(ByteableObject):
         self.csys = Csys()
         self.mesh_index = self.MESH_INDEX
 
-        self.MESH_INDEX += 1
+        Mesh.MESH_INDEX += 1
 
     def tobytes(self) -> bytes | bytearray:
 
@@ -267,7 +274,7 @@ class Mesh(ByteableObject):
         pts = []
         for tri in self.triangles:
             pts += tri.positions
-        ret = pyrr.aabb.create_from_points(pts)
+        ret = [Vector3(x) for x in pyrr.aabb.create_from_points(pts)]
 
         return ret
 
@@ -277,18 +284,24 @@ class Camera:
         self.fov = 30.0  # degrees
         self.aspect = 16.0 / 9.0
         self.near_plane = 240.0
-        self.pos = Vector3((0.0, 0.0, 0.0), dtype="f4")
+        # self.pos = Vector3((0.0, 0.0, 0.0), dtype="f4")
 
         # TODO investigate these, they don't match intent
-        self.roll = 0.0
-        self.pitch = 0.0
-        self.yaw = 0.0
+        # self.roll = 0.0
+        # self.pitch = 0.0
+        # self.yaw = 0.0
+
+        self.csys = Csys()
 
     @property
     def orientation(self):
         """Returns the mat44 based on the pitch, roll, yaw angles.
         TODO: support the non-global implementation of this, whatever its called
-        i.e. sequential rotations like this: RzRxRz"""
+        i.e. sequential rotations like this: RzRxRz"""  #
+
+        raise NotImplementedError
+        # return self.csys.rotation_matrix
+
         return Matrix44.from_eulers(
             [radians(x) for x in [self.pitch, self.yaw, self.roll]]
         )
@@ -306,7 +319,9 @@ class Camera:
     @property
     def local_to_world_matrix(self):
         """Calculates the local to world mat44 transform"""
-        return self.orientation.inverse * Matrix44.from_translation(-1 * self.pos)
+        return self.csys.transformation_matrix.inverse
+        # return self.orientation.inverse * Matrix44.from_translation(-1 * self.pos)
+        Matrix44.identity() * Matrix44.from_translation(-1 * self.pos)
 
     @property
     def view_params(self):
@@ -314,89 +329,115 @@ class Camera:
             [self.plane_width, self.plane_height, self.near_plane],
         )
 
-    def rotate(self, axis: str, rot_deg: int | float | Iterable[int | float]):
-        raise NotImplementedError
-        if not isinstance(rot_deg, Iterable):
-            degs = [rot_deg]
-
-        if not len(axis) == len(degs):
-            raise Exception("Incorrect length match")
-        for axis, deg in zip(axis, degs):
-            if axis == "x":
-                self.orientation.from_x_rotation(radians(deg))
-                pass
-            elif axis == "y":
-                self.orientation.from_y_rotation(radians(deg))
-                pass
-            elif axis == "z":
-                self.orientation.from_z_rotation(radians(deg))
-                pass
-
 
 class Csys:
+    # I think this is now a safe but perhaps costly way to handle this?
+
     def __init__(self):
-        self.mat = Matrix44.identity()
         self.pos = Vector3((0.0, 0.0, 0.0))
         self.quat = pyrr.quaternion.create()
 
     @property
-    def rotation_matrix(self):
+    def rotation_matrix(self) -> Matrix33:
+        """returns just the orientation matrix"""
+        # raise NotImplementedError
         return Matrix33(pyrr.matrix33.create_from_quaternion(self.quat))
 
     @property
-    def transformation_matrix(self):
+    def transformation_matrix(self) -> Matrix44:
+        """Returns the rotation translation Mat44 from the postion and quat"""
         ret = pyrr.matrix44.create_from_quaternion(self.quat)
         ret[3][0:3] = self.pos
-        ret = Matrix44(ret)
+        ret = Matrix44(ret, dtype="f4")
         return ret
 
-    def __str__(self):
-        return self.mat.__str__()
+    def __str__(self) -> str:
+        return self.transformation_matrix.__str__()
 
-    def __repr__(self):
-        scale, rotate, translate = self.mat.decompose()
-        return f"Csys(\nscale={scale}\nrotate={rotate}\ntranslate={translate}\n{self.mat.__str__()}\n)"
+    def __repr__(self) -> str:
+        scale, rotate, translate = self.transformation_matrix.decompose()
+        return f"Csys(\nscale={scale}\nrotate={rotate}\ntranslate={translate}\n{self.transformation_matrix.__str__()}\n)"
 
-    def Rx(self, degrees: float):
+    @property
+    def scale(self):
+        # TODO implement scaling to the meshes in this way potentially?
+        raise NotImplementedError
+        scale, _ = self.transformation_matrix.decompose()
+        return scale
+
+    def Rxp(self, degrees: float) -> Csys:
+        """Rotate about x' axis"""
         rad = radians(degrees)
         ax = Vector3(self.rotation_matrix.r1)
-        self.quat = pyrr.quaternion.create_from_axis_rotation(ax, rad)
-        rot_mat = pyrr.matrix44.create_from_quaternion(self.quat)
-        self.mat = pyrr.matrix44.multiply(self.mat, rot_mat)
+        self.quat = Vector4(pyrr.quaternion.create_from_axis_rotation(ax, rad))
         return self
 
-    def Ry(self, degrees: float):
+    def Ryp(self, degrees: float) -> Csys:
+        """Rotate about y' axis"""
         rad = radians(degrees)
         ax = Vector3(self.rotation_matrix.r2)
-        self.quat = pyrr.quaternion.create_from_axis_rotation(ax, rad)
-        rot_mat = pyrr.matrix44.create_from_quaternion(self.quat)
-        self.mat = pyrr.matrix44.multiply(self.mat, rot_mat)
+        self.quat = Vector4(pyrr.quaternion.create_from_axis_rotation(ax, rad))
         return self
 
-    def Rz(self, degrees: float):
+    def Rzp(self, degrees: float) -> Csys:
+        """Rotate about z' axis"""
         rad = radians(degrees)
         ax = Vector3(self.rotation_matrix.r3)
-        self.quat = pyrr.quaternion.create_from_axis_rotation(ax, rad)
-        rot_mat = pyrr.matrix44.create_from_quaternion(self.quat)
-        self.mat = pyrr.matrix44.multiply(self.mat, rot_mat)
+        self.quat = Vector4(pyrr.quaternion.create_from_axis_rotation(ax, rad))
         return self
 
-    def translate(self, vec: Vector3):
-        x, y, z = vec
-        self.pos.x += x
-        self.pos.y += y
-        self.pos.z += z
+    def Rxg(self, degrees: float) -> Csys:
+        """Rotate about x global axis"""
+        rad = radians(degrees)
+        ax = Vector3((1.0, 0.0, 0.0))
+        self.quat = Vector4(pyrr.quaternion.create_from_axis_rotation(ax, rad))
         return self
 
-    # def convert_point(self, pt:Vector3):
+    def Ryg(self, degrees: float) -> Csys:
+        """Rotate about y global axis"""
+        rad = radians(degrees)
+        ax = Vector3((0.0, 1.0, 0.0))
+        self.quat = Vector4(pyrr.quaternion.create_from_axis_rotation(ax, rad))
+        return self
+
+    def Rzg(self, degrees: float) -> Csys:
+        """Rotate about z global axis"""
+        rad = radians(degrees)
+        ax = Vector3((0.0, 0.0, 1.0))
+        self.quat = Vector4(pyrr.quaternion.create_from_axis_rotation(ax, rad))
+        return self
+
+    def tg(self, vec: Vector3) -> Csys:
+        """Translate incrementally global"""
+        x = vec
+        ax = Matrix33.identity()
+        self.pos = ax * x
+        return self
+
+    def tp(self, vec: Vector3) -> Csys:
+        """Translate incrementally local"""
+        x = vec
+        ax = self.rotation_matrix
+        self.pos = ax * x
+        return self
+
+    def move_to(self, vec: Vector3) -> Csys:
+        self.pos = vec
+        return self
+
+    # def txp(self, dst: float) -> Csys:
+    #     """translate"""
+    #     ax = self.rotation_matrix.r1
+    #     self.pos += Vector3(ax[:3]).normalized * dst
+    #     return self
 
 
 class Scene:
-
     def __init__(self) -> None:
         self.meshes: list[Mesh] = []
         self.spheres: list[Sphere] = []
         self.cam = Camera()
+        self.selected_objects: list[Triangle | Mesh | Sphere] = []
 
     def get_mesh_index(self, msh: Mesh) -> int:
         try:
@@ -416,3 +457,13 @@ class Scene:
         for m in self.meshes:
             ret += m.triangles
         return ret
+
+    def select_object(self, obj):
+        self.selected_objects.append(obj)
+
+    def deselect_object(self, obj):
+        self.selected_objects.remove(obj)
+
+    def deselect_all_objects(self):
+        raise NotImplementedError
+        self.selected_objects = []
