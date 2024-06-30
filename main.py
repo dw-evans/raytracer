@@ -54,13 +54,13 @@ class ShaderProgram:
 os.chdir(Path(__file__).parent)
 
 
-PROGRAM = ShaderProgram.DUMB
+PROGRAM = ShaderProgram.RAYTRACER
 
 WINDOW_HEIGHT = 540
 ASPECT_RATIO = 16.0 / 9.0
 SCALE_FACTOR = 1
 
-STATIC_RENDER = False
+STATIC_RENDER = True
 STATIC_RENDER_ANIMATION = False
 
 DYNAMIC_RENDER_FRAMERATE = 60
@@ -74,6 +74,7 @@ STATIC_RENDER_TIME_DURATION = 2.0
 
 CAMERA_LINEAR_SPEED = 3.0  # units per second
 CAMERA_ANGULAR_SPEED = 5.0  # degrees per second per 1 px of movement
+CAMERA_SCROLL_SPEED = 20.0
 
 dt = 1 / STATIC_RENDER_FRAMERATE
 n_frames = STATIC_RENDER_FRAMERATE * STATIC_RENDER_TIME_DURATION
@@ -388,6 +389,7 @@ def main_loop():
     cam_linear_speed_adjusted = 1 / DYNAMIC_RENDER_FRAMERATE * CAMERA_LINEAR_SPEED
     cam_angular_speed_adjusted = 1 / DYNAMIC_RENDER_FRAMERATE * CAMERA_ANGULAR_SPEED
     screen_center = (WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2)
+    cam_scroll_speed_adjusted = 1 / DYNAMIC_RENDER_FRAMERATE * CAMERA_SCROLL_SPEED
 
     running = True
     if not STATIC_RENDER_ANIMATION:
@@ -482,6 +484,11 @@ def main_loop():
                             # pygame.mouse.set_visible(True)
                             MMB_PRESSED = False
 
+                    if event.type == pygame.MOUSEWHEEL:
+                        scroll = event.precise_y
+
+                        scene.cam.fov += -1 * scroll * cam_scroll_speed_adjusted
+
                 if MMB_PRESSED:
                     # pygame.mouse.set_pos(screen_center)
                     # mouse_dx, mouse_dy = pygame.mouse.get_rel()
@@ -492,10 +499,12 @@ def main_loop():
                     MOUSE_LAST_POS_X = mouse_x
                     MOUSE_LAST_POS_Y = mouse_y
 
-                    print(f"{mouse_dx, mouse_dy}")
+                    print(f"mouse_dx, mouse_dy = {mouse_dx, mouse_dy}")
 
                     dyaw = mouse_dx * cam_angular_speed_adjusted
                     dpitch = mouse_dy * cam_angular_speed_adjusted
+
+                    print(f"dyaw, dpitch = {dyaw, dpitch}")
 
                     # dyaw = 1
                     # dpitch = 1
@@ -567,7 +576,7 @@ def listener_loop():
     global MODIFY_COMMAND
     global MODIFICATION_WAITING
 
-    import regex as re
+    import regex as re      
 
     # valid_methods = [x for x in dir(Csys) if re.match(r"[rt]\w\w")]
     valid_methods = dir(Csys)

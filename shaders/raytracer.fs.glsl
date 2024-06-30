@@ -412,6 +412,8 @@ vec3 traceRay(Ray ray, inout uint rngState)
     vec3 incomingLight = vec3(0.0, 0.0, 0.0);
     vec3 rayColor = vec3(1.0,1.0,1.0);
 
+
+
     for (int i = 0; i <= MAX_BOUNCES; i++)
     {
         HitInfo hitInfo = calculateRayCollision(ray);
@@ -459,12 +461,26 @@ void main()
     // Btw we can just interpolate the ray direction from the vertex shader.
     Ray ray;
     ray.origin = CamGlobalPos;
+
+
+    vec3 rayVec = viewPoint - ray.origin;
+    // rayVec.x = rayVec.x + randomValue(rngState) * 1;
+    // rayVec.y = rayVec.y + randomValue(rngState) * 1;
+
+
+
     ray.dir = normalize(viewPoint - ray.origin);
 
     vec3 totalIncomingLight = vec3(0.0, 0.0, 0.0);
     for (int i = 0; i < RAYS_PER_PIXEL; i++)
     {
-        totalIncomingLight += traceRay(ray, rngState);
+        // make a new ray with a slightly deviated angle (offset by 1 px)
+        Ray newRay;
+        newRay.dir = normalize(rayVec + (vec3(randomValue(rngState), randomValue(rngState), 0.0) * 2.0 - 1) * 0.3);
+        newRay.origin = ray.origin.xyz;
+
+        totalIncomingLight += traceRay(newRay, rngState);
+        // totalIncomingLight += traceRay(ray, rngState);
     }
 
     totalIncomingLight /= RAYS_PER_PIXEL;
