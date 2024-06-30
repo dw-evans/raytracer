@@ -331,7 +331,7 @@ HitInfo calculateRayCollision(Ray ray)
     {
         Triangle tri = getTriangle(i);
 
-        int triMeshIndex = tri.meshIndex;
+        // int triMeshIndex = tri.meshIndex;
 
         for (int j = 0; j < meshCount; j++)
         {
@@ -353,7 +353,7 @@ HitInfo calculateRayCollision(Ray ray)
         {
             closestHit = hitInfo;
             
-            if (triMeshIndex == selectedMeshId)
+            if (tri.meshIndex == selectedMeshId)
             {
                 closestHit.material = highlightMaterials[0];
             }
@@ -361,7 +361,6 @@ HitInfo calculateRayCollision(Ray ray)
             {
                 closestHit.material = tri.material;
             }
-
             
         }
     }

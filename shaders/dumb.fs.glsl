@@ -29,6 +29,8 @@ uniform bool STATIC_RENDER;
 uniform vec3 skyColor;
 uniform vec3 groundColor;
 
+uniform int selectedMeshId;
+
 float inf = 1.0 / 0.0;
 float pi = 3.14159265359;
 
@@ -38,6 +40,11 @@ struct Material
     vec3 emissionColor; // 12
     float emissionStrength; // 4
     float smoothness; // 4 + 12
+};
+
+layout(std140) uniform materialBuffer
+{
+    Material highlightMaterials[4];
 };
 
 struct Sphere
@@ -331,11 +338,20 @@ HitInfo calculateRayCollision(Ray ray)
             ray,
             tri
         );
-
+        
         if (hitInfo.didHit && hitInfo.dst < closestHit.dst)
         {
             closestHit = hitInfo;
-            closestHit.material = tri.material;
+            
+            if (tri.meshIndex == selectedMeshId)
+            {
+                closestHit.material = highlightMaterials[0];
+            }
+            else
+            {
+                closestHit.material = tri.material;
+            }
+            
         }
     }
 

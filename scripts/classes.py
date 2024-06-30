@@ -331,11 +331,9 @@ class Camera:
 
 
 class Csys:
-    # I think this is now a safe but perhaps costly way to handle this?
-
     def __init__(self):
         self.pos = Vector3((0.0, 0.0, 0.0))
-        self.quat = pyrr.quaternion.create()
+        self.quat = pyrr.Quaternion()
 
     @property
     def rotation_matrix(self) -> Matrix33:
@@ -365,46 +363,48 @@ class Csys:
         scale, _ = self.transformation_matrix.decompose()
         return scale
 
-    def Rxp(self, degrees: float) -> Csys:
+    def rxp(self, degrees: float) -> Csys:
         """Rotate about x' axis"""
         rad = radians(degrees)
         ax = Vector3(self.rotation_matrix.r1)
-        self.quat = Vector4(pyrr.quaternion.create_from_axis_rotation(ax, rad))
+        self.quat = self.quat.cross(pyrr.quaternion.create_from_axis_rotation(ax, rad))
         return self
 
-    def Ryp(self, degrees: float) -> Csys:
+    def ryp(self, degrees: float) -> Csys:
         """Rotate about y' axis"""
         rad = radians(degrees)
         ax = Vector3(self.rotation_matrix.r2)
-        self.quat = Vector4(pyrr.quaternion.create_from_axis_rotation(ax, rad))
+        self.quat = self.quat.cross(pyrr.quaternion.create_from_axis_rotation(ax, rad))
         return self
 
-    def Rzp(self, degrees: float) -> Csys:
+    def rzp(self, degrees: float) -> Csys:
         """Rotate about z' axis"""
         rad = radians(degrees)
         ax = Vector3(self.rotation_matrix.r3)
-        self.quat = Vector4(pyrr.quaternion.create_from_axis_rotation(ax, rad))
+        self.quat = self.quat.cross(pyrr.quaternion.create_from_axis_rotation(ax, rad))
         return self
 
-    def Rxg(self, degrees: float) -> Csys:
+    def rxg(self, degrees: float) -> Csys:
         """Rotate about x global axis"""
         rad = radians(degrees)
         ax = Vector3((1.0, 0.0, 0.0))
-        self.quat = Vector4(pyrr.quaternion.create_from_axis_rotation(ax, rad))
+        self.quat = self.quat.cross(pyrr.quaternion.create_from_axis_rotation(ax, rad))
         return self
 
-    def Ryg(self, degrees: float) -> Csys:
+    def ryg(self, degrees: float) -> Csys:
         """Rotate about y global axis"""
         rad = radians(degrees)
         ax = Vector3((0.0, 1.0, 0.0))
-        self.quat = Vector4(pyrr.quaternion.create_from_axis_rotation(ax, rad))
+        self.quat = self.quat.cross(pyrr.quaternion.create_from_axis_rotation(ax, rad))
         return self
 
-    def Rzg(self, degrees: float) -> Csys:
+    def rzg(self, degrees: float) -> Csys:
         """Rotate about z global axis"""
         rad = radians(degrees)
         ax = Vector3((0.0, 0.0, 1.0))
-        self.quat = Vector4(pyrr.quaternion.create_from_axis_rotation(ax, rad))
+        self.quat = self.quat.cross(
+            Vector4(pyrr.quaternion.create_from_axis_rotation(ax, rad))
+        )
         return self
 
     def tg(self, vec: Vector3) -> Csys:
@@ -421,9 +421,36 @@ class Csys:
         self.pos = ax * x
         return self
 
-    def move_to(self, vec: Vector3) -> Csys:
-        self.pos = vec
+    def txp(self, dst: float) -> Csys:
+        ax = self.rotation_matrix.r1[:3]
+        self.pos += dst * ax
         return self
+
+    def typ(self, dst: float) -> Csys:
+        ax = self.rotation_matrix.r2.xyz
+        self.pos += dst * ax
+        return self
+
+    def tzp(self, dst: float) -> Csys:
+        ax = self.rotation_matrix.r3.xyz
+        self.pos += dst * ax
+        return self
+
+    def txg(self, dst: float) -> Csys:
+        self.pos.x += dst
+        return self
+
+    def tyg(self, dst: float) -> Csys:
+        self.pos.y += dst
+        return self
+
+    def tzg(self, dst: float) -> Csys:
+        self.pos.z += dst
+        return self
+
+    # def move_to(self, vec: Vector3) -> Csys:
+    #     self.pos = vec
+    #     return self
 
     # def txp(self, dst: float) -> Csys:
     #     """translate"""
@@ -467,3 +494,11 @@ class Scene:
     def deselect_all_objects(self):
         raise NotImplementedError
         self.selected_objects = []
+
+    def serialise(self):
+        raise NotImplementedError
+        pass
+
+    def serialiser(self) -> str:
+        raise NotImplementedError
+        pass

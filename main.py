@@ -56,21 +56,24 @@ os.chdir(Path(__file__).parent)
 
 PROGRAM = ShaderProgram.RAYTRACER
 
-WINDOW_HEIGHT = 270
+WINDOW_HEIGHT = 540
 ASPECT_RATIO = 16.0 / 9.0
 SCALE_FACTOR = 1
 
 STATIC_RENDER = False
 STATIC_RENDER_ANIMATION = False
 
-DYNAMIC_RENDER_FRAMERATE = 1
+DYNAMIC_RENDER_FRAMERATE = 60
 
-MAX_RAY_BOUNCES = 2
-RAYS_PER_PIXEL = 1
+MAX_RAY_BOUNCES = 3
+RAYS_PER_PIXEL = 4
 
 STATIC_RENDER_FRAMERATE = 144
 STATIC_RENDER_CYCLES_PER_FRAME = 256
 STATIC_RENDER_TIME_DURATION = 2.0
+
+CAMERA_LINEAR_SPEED = 2.0  # units per second
+CAMERA_ANGULAR_SPEED = 0.01  # degrees per second per 1 px of movement
 
 dt = 1 / STATIC_RENDER_FRAMERATE
 n_frames = STATIC_RENDER_FRAMERATE * STATIC_RENDER_TIME_DURATION
@@ -84,8 +87,10 @@ if STATIC_RENDER and STATIC_RENDER_ANIMATION:
     dir_render = wd / "renders" / date.strftime("%Y.%m.%d_%H%M%S")
     dir_render.mkdir()
 
-MOUSE_ENABLED = False
-KEYBOARD_ENABLED = False
+MOUSE_ENABLED = True
+KEYBOARD_ENABLED = True
+
+WINDOW_WIDTH = int(WINDOW_HEIGHT * ASPECT_RATIO)
 
 
 scene = Scene()
@@ -195,7 +200,7 @@ spheres = [
 ]
 scene.spheres = spheres
 
-stl_file = Path() / "objects/monkey.stl"
+stl_file = Path() / "objects/funky_cube.stl"
 
 msh0 = Mesh.from_stl(
     stl_file,
@@ -203,7 +208,7 @@ msh0 = Mesh.from_stl(
 )
 scene.meshes.append(msh0)
 msh0.csys.tp(Vector3((0, 0.0, 6.0)))
-msh0.csys.Rzg(180)
+msh0.csys.rzg(180)
 
 msh1 = Mesh.from_stl(
     stl_file,
@@ -212,7 +217,7 @@ msh1 = Mesh.from_stl(
 scene.meshes.append(msh1)
 
 msh1.csys.tp(Vector3((-1.5, 1.0, 9.0)))
-msh1.csys.Rzg(100)
+msh1.csys.rzg(100)
 
 msh2 = Mesh.from_stl(
     stl_file,
@@ -220,19 +225,25 @@ msh2 = Mesh.from_stl(
 )
 scene.meshes.append(msh2)
 msh2.csys.tp(Vector3((2, 0.0, 8.0)))
-msh2.csys.Rzg(90)
+msh2.csys.rzg(90)
+
 SELECTED_MESH_ID = -1
 
+MODIFICATION_WAITING = False
+MODIFY_COMMAND: callable = lambda: None
 
-modification_waiting = False
+MMB_PRESSED = False
+MOUSE_LAST_POS_X = 0
+MOUSE_LAST_POS_Y = 0
 
 
 def main_loop():
     global SELECTED_MESH_ID
     global triangles_ssbo
     global ctx
-    global modification_waiting
-    global modify_command
+    global MODIFICATION_WAITING
+    global MODIFY_COMMAND
+    global MMB_PRESSED
 
     pygame.init()
 
@@ -374,6 +385,10 @@ def main_loop():
 
     mouse_sphere = spheres[-1]
 
+    cam_linear_speed_adjusted = 1 / DYNAMIC_RENDER_FRAMERATE * CAMERA_LINEAR_SPEED
+    cam_angular_speed_adjusted = 1 / DYNAMIC_RENDER_FRAMERATE * CAMERA_ANGULAR_SPEED
+    screen_center = (WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2)
+
     running = True
     if not STATIC_RENDER_ANIMATION:
         try:
@@ -385,56 +400,93 @@ def main_loop():
                         sys.exit()
 
                     if KEYBOARD_ENABLED:
-                        SPEED = 2.0
+
                         key_state = pygame.key.get_pressed()
                         if key_state[pygame.K_w]:
-                            cam.csys.pos.z += 1 / DYNAMIC_RENDER_FRAMERATE * SPEED
+                            cam.csys.tzp(1 * cam_linear_speed_adjusted)
                         if key_state[pygame.K_s]:
-                            cam.csys.pos.z += -1 / DYNAMIC_RENDER_FRAMERATE * SPEED
+                            cam.csys.tzp(-1 * cam_linear_speed_adjusted)
                         if key_state[pygame.K_d]:
-                            cam.csys.pos.x += -1 / DYNAMIC_RENDER_FRAMERATE * SPEED
+                            cam.csys.txp(1 * cam_linear_speed_adjusted)
                         if key_state[pygame.K_a]:
-                            cam.csys.pos.x += 1 / DYNAMIC_RENDER_FRAMERATE * SPEED
+                            cam.csys.txp(-1 * cam_linear_speed_adjusted)
                         if key_state[pygame.K_q]:
-                            cam.csys.pos.z += -1 / DYNAMIC_RENDER_FRAMERATE * SPEED
+                            pass
                         if key_state[pygame.K_e]:
-                            cam.csys.pos.z += -1 / DYNAMIC_RENDER_FRAMERATE * SPEED
+                            pass
 
-                    mouse_x, mouse_y = pygame.mouse.get_pos()
-                    # print(mouse_x, mouse_y)
+                    if MOUSE_ENABLED:
+                        mouse_x, mouse_y = pygame.mouse.get_pos()
 
-                    mouse_ray = convert_screen_coords_to_camera_ray(
-                        mouse_x,
-                        mouse_y,
-                        screen.get_width(),
-                        screen.get_height(),
-                        cam=scene.cam,
-                    )
+                        mouse_ray = convert_screen_coords_to_camera_ray(
+                            mouse_x,
+                            mouse_y,
+                            screen.get_width(),
+                            screen.get_height(),
+                            cam=scene.cam,
+                        )
 
-                    hits = rayScene(mouse_ray, scene)
-                    hits = [h for h in hits if isinstance(h[1], Triangle)]
-                    if hits:
-                        # print(
-                        #     f"n_hits={len(hits)}, {', '.join((str(type(x[1])) for x in hits))}"
-                        # )
-                        mouse_sphere.pos = hits[0][2]
-
-                    if event.type == pygame.MOUSEBUTTONDOWN:
+                        hits = rayScene(mouse_ray, scene)
+                        hits = [h for h in hits if isinstance(h[1], Triangle)]
                         if hits:
-                            obj = hits[0][1]
-                            if isinstance(obj, Triangle):
-                                SELECTED_MESH_ID = obj.parent.mesh_index
-                                program["selectedMeshId"].write(
-                                    struct.pack("i", SELECTED_MESH_ID)
-                                )
-                                # print(f"selectedMeshId = {SELECTED_MESH_ID}")
-                        else:
-                            SELECTED_MESH_ID = -1
-                            program["selectedMeshId"].write(
-                                struct.pack("i", SELECTED_MESH_ID)
-                            )
+                            # print(
+                            #     f"n_hits={len(hits)}, {', '.join((str(type(x[1])) for x in hits))}"
+                            # )
+                            mouse_sphere.pos = hits[0][2]
 
-                            # print(f"selectedMeshId = {SELECTED_MESH_ID}")
+                        if event.type == pygame.MOUSEBUTTONDOWN:
+                            # right mouse button
+                            if event.button == 1:
+                                if hits:
+                                    obj = hits[0][1]
+                                    if isinstance(obj, Triangle):
+                                        SELECTED_MESH_ID = obj.parent.mesh_index
+                                        program["selectedMeshId"].write(
+                                            struct.pack("i", SELECTED_MESH_ID)
+                                        )
+                                        # print(f"selectedMeshId = {SELECTED_MESH_ID}")
+                                else:
+                                    SELECTED_MESH_ID = -1
+                                    program["selectedMeshId"].write(
+                                        struct.pack("i", SELECTED_MESH_ID)
+                                    )
+                            # middle mouse button
+                            elif event.button == 2:
+                                # store the current position here to reset it later
+                                MOUSE_LAST_POS_X = mouse_x
+                                MOUSE_LAST_POS_Y = mouse_y
+                                # grab the mouse to send it to the centre
+                                pygame.event.set_grab(True)
+                                pygame.mouse.set_visible(False)
+                                # call the get_rel() method to reset the mouse's last position
+                                pygame.mouse.get_rel()
+                                # set the flag
+                                MMB_PRESSED = True
+
+                    if event.type == pygame.MOUSEBUTTONUP:
+                        if event.button == 1:
+                            pass
+                        elif event.button == 2:
+
+                            pygame.mouse.set_pos((MOUSE_LAST_POS_X, MOUSE_LAST_POS_Y))
+
+                            # MOUSE_LAST_POS_X, MOUSE_LAST_POS_Y = mouse_x, mouse_y
+                            # release the mouse!
+                            pygame.event.set_grab(False)
+                            pygame.mouse.set_visible(True)
+                            MMB_PRESSED = False
+
+                if MMB_PRESSED:
+                    pygame.mouse.set_pos(screen_center)
+                    mouse_dx, mouse_dy = pygame.mouse.get_rel()
+
+                    print(f"{mouse_dx, mouse_dy}")
+
+                    dyaw = mouse_dx * cam_angular_speed_adjusted
+                    dpitch = mouse_dy * cam_angular_speed_adjusted
+
+                    cam.csys.ryp(dyaw)
+                    cam.csys.rxp(dpitch)
 
                 if STATIC_RENDER:
                     time = 0
@@ -458,10 +510,9 @@ def main_loop():
                 # tri_buffer = ctx.buffer(tri_bytes)
                 # tri_buffer.bind_to_uniform_block(tri_buffer_binding)
 
-                if modification_waiting:
-                    modify_command()
-                    modification_waiting = False
-                
+                if MODIFICATION_WAITING:
+                    MODIFY_COMMAND()
+                    MODIFICATION_WAITING = False
 
                 pass
                 # triangles_ssbo_binding = 9
@@ -494,21 +545,21 @@ def main_loop():
             pass
 
 
-
 def listener_loop():
     global SELECTED_MESH_ID
     global triangles_ssbo
     global ctx
-    global modify_command
-    global modification_waiting
+    global MODIFY_COMMAND
+    global MODIFICATION_WAITING
 
     import regex as re
 
+    # valid_methods = [x for x in dir(Csys) if re.match(r"[rt]\w\w")]
     valid_methods = dir(Csys)
 
     while True:
 
-        command = input("Enter your command")
+        command = input("Enter your command >> ")
 
         print(f"selected index = {SELECTED_MESH_ID}")
         print([m.mesh_index for m in scene.meshes])
@@ -519,26 +570,27 @@ def listener_loop():
             print("Mesh not valid")
             continue
 
-        match = re.match(r"(\w*\D)(?:\s*)((?:\d+)(?:.\d*))", command)
+        match = re.match(r"(\w*?)(?:\s*)((?:-)?(?:\d+)(?:.\d*)?)", command)
 
         if not match:
             continue
 
-        if not match.group(1).capitalize() in valid_methods:
+        if not match.group(1) in valid_methods:
+            print(f"{match.group(1)} is not a valid command")
             continue
 
-        print(f"modifying mesh with command `{command}`")
+        print(f"command recognised modifying mesh with command `{command}`")
 
-        msh.csys.__getattribute__(match.group(1).capitalize())(float(match.group(2)))
+        msh.csys.__getattribute__(match.group(1))(float(match.group(2)))
 
-
-
-        modify_command = lambda: triangles_ssbo.write(
+        # write the modify command into a lambda that can be called.
+        # quite cursed but gets the job done
+        MODIFY_COMMAND = lambda: triangles_ssbo.write(
             iter_to_bytes(
                 [t.update_pos_with_mesh2() for t in scene.triangles],
             )
         )
-        modification_waiting = True
+        MODIFICATION_WAITING = True
 
         pass
 
@@ -549,6 +601,9 @@ def main():
 
     t1.start()
     t2.start()
+
+    t1.join()
+    t2.join()
 
 
 if __name__ == "__main__":
