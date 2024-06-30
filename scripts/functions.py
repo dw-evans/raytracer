@@ -141,6 +141,7 @@ def rayTriangle(
     hitInfo.normal = normalize(N)
     hitInfo.didHit = True
     hitInfo.dst = t
+    hitInfo.hitPoint = ray.origin + hitInfo.dst * ray.dir
 
     return hitInfo
 
@@ -214,7 +215,8 @@ def rayScene(
         if not hit_info.didHit:
             continue
 
-        hit_position = ray.dir * hit_info.dst
+        # hit_position = ray.dir * hit_info.dst + ray.origin
+        hit_position = hit_info.hitPoint
 
         ret.append((hit_info.dst, sphere, hit_position))
 
@@ -233,7 +235,8 @@ def rayScene(
             if not hit_info.didHit:
                 continue
 
-            hit_position = ray.dir * hit_info.dst
+            # hit_position = ray.dir * hit_info.dst + ray.origin
+            hit_position = hit_info.hitPoint
 
             ret.append((hit_info.dst, triangle, hit_position))
 

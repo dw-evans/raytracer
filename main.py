@@ -54,7 +54,7 @@ class ShaderProgram:
 os.chdir(Path(__file__).parent)
 
 
-PROGRAM = ShaderProgram.RAYTRACER
+PROGRAM = ShaderProgram.DUMB
 
 WINDOW_HEIGHT = 540
 ASPECT_RATIO = 16.0 / 9.0
@@ -66,14 +66,14 @@ STATIC_RENDER_ANIMATION = False
 DYNAMIC_RENDER_FRAMERATE = 60
 
 MAX_RAY_BOUNCES = 3
-RAYS_PER_PIXEL = 4
+RAYS_PER_PIXEL = 8
 
 STATIC_RENDER_FRAMERATE = 144
 STATIC_RENDER_CYCLES_PER_FRAME = 256
 STATIC_RENDER_TIME_DURATION = 2.0
 
-CAMERA_LINEAR_SPEED = 2.0  # units per second
-CAMERA_ANGULAR_SPEED = 0.01  # degrees per second per 1 px of movement
+CAMERA_LINEAR_SPEED = 3.0  # units per second
+CAMERA_ANGULAR_SPEED = 5.0  # degrees per second per 1 px of movement
 
 dt = 1 / STATIC_RENDER_FRAMERATE
 n_frames = STATIC_RENDER_FRAMERATE * STATIC_RENDER_TIME_DURATION
@@ -414,6 +414,10 @@ def main_loop():
                             pass
                         if key_state[pygame.K_e]:
                             pass
+                        if key_state[pygame.K_SPACE]:
+                            cam.csys.tyg(1 * cam_linear_speed_adjusted)
+                        if key_state[pygame.K_LCTRL]:
+                            cam.csys.tyg(-1 * cam_linear_speed_adjusted)
 
                     if MOUSE_ENABLED:
                         mouse_x, mouse_y = pygame.mouse.get_pos()
@@ -456,10 +460,10 @@ def main_loop():
                                 MOUSE_LAST_POS_X = mouse_x
                                 MOUSE_LAST_POS_Y = mouse_y
                                 # grab the mouse to send it to the centre
-                                pygame.event.set_grab(True)
-                                pygame.mouse.set_visible(False)
+                                # pygame.event.set_grab(True)
+                                # pygame.mouse.set_visible(False)
                                 # call the get_rel() method to reset the mouse's last position
-                                pygame.mouse.get_rel()
+                                # pygame.mouse.get_rel()
                                 # set the flag
                                 MMB_PRESSED = True
 
@@ -467,23 +471,34 @@ def main_loop():
                         if event.button == 1:
                             pass
                         elif event.button == 2:
+                            MOUSE_LAST_POS_X = mouse_x
+                            MOUSE_LAST_POS_Y = mouse_y
 
-                            pygame.mouse.set_pos((MOUSE_LAST_POS_X, MOUSE_LAST_POS_Y))
+                            # pygame.mouse.set_pos((MOUSE_LAST_POS_X, MOUSE_LAST_POS_Y))
 
                             # MOUSE_LAST_POS_X, MOUSE_LAST_POS_Y = mouse_x, mouse_y
                             # release the mouse!
-                            pygame.event.set_grab(False)
-                            pygame.mouse.set_visible(True)
+                            # pygame.event.set_grab(False)
+                            # pygame.mouse.set_visible(True)
                             MMB_PRESSED = False
 
                 if MMB_PRESSED:
-                    pygame.mouse.set_pos(screen_center)
-                    mouse_dx, mouse_dy = pygame.mouse.get_rel()
+                    # pygame.mouse.set_pos(screen_center)
+                    # mouse_dx, mouse_dy = pygame.mouse.get_rel()
+
+                    mouse_dx = mouse_x - MOUSE_LAST_POS_X
+                    mouse_dy = mouse_y - MOUSE_LAST_POS_Y
+
+                    MOUSE_LAST_POS_X = mouse_x
+                    MOUSE_LAST_POS_Y = mouse_y
 
                     print(f"{mouse_dx, mouse_dy}")
 
                     dyaw = mouse_dx * cam_angular_speed_adjusted
                     dpitch = mouse_dy * cam_angular_speed_adjusted
+
+                    # dyaw = 1
+                    # dpitch = 1
 
                     cam.csys.ryp(dyaw)
                     cam.csys.rxp(dpitch)

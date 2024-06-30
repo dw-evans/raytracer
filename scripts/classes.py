@@ -14,8 +14,8 @@ class HitInfo:
     def __init__(self) -> None:
         self.didHit: bool = False
         self.dst: float = np.inf
-        self.hitPoint = np.array([0.0, 0.0, 0.0])
-        self.normal = np.array([0.0, 0.0, 0.0])
+        self.hitPoint = Vector3()
+        self.normal = Vector3()
 
 
 class Ray:
@@ -422,17 +422,19 @@ class Csys:
         return self
 
     def txp(self, dst: float) -> Csys:
-        ax = self.rotation_matrix.r1[:3]
+        ax = Vector3(self.rotation_matrix.c1)
+        print(f"txp: {dst * ax}")
         self.pos += dst * ax
         return self
 
     def typ(self, dst: float) -> Csys:
-        ax = self.rotation_matrix.r2.xyz
+        ax = Vector3(self.rotation_matrix.c2)
         self.pos += dst * ax
         return self
 
     def tzp(self, dst: float) -> Csys:
-        ax = self.rotation_matrix.r3.xyz
+        ax = Vector3(self.rotation_matrix.c3)
+        print(f"tzp: {dst * ax}")
         self.pos += dst * ax
         return self
 
