@@ -34,6 +34,8 @@ uniform vec3 groundColor;
 
 uniform int selectedMeshId;
 
+uniform float depthOfFieldStrength;
+
 float inf = 1.0 / 0.0;
 float pi = 3.14159265359;
 
@@ -456,12 +458,12 @@ void main()
 
     // calculate the camere bits
     vec3 viewPointLocal = (vec3(fragPosition.xy / 2.0, 1) * ViewParams);
-    vec3 viewPoint = (CamLocalToWorldMatrix * vec4(viewPointLocal.xyz, 1.0)).xyz;
+    vec3 viewPoint = (transpose(CamLocalToWorldMatrix) * vec4(viewPointLocal.xyz, 1.0)).xyz;
 
     // Btw we can just interpolate the ray direction from the vertex shader.
     Ray ray;
     ray.origin = CamGlobalPos;
-
+    ray.dir = normalize(viewPoint);
 
     vec3 rayVec = viewPoint - ray.origin;
     // rayVec.x = rayVec.x + randomValue(rngState) * 1;
@@ -469,18 +471,25 @@ void main()
 
 
 
-    ray.dir = normalize(viewPoint - ray.origin);
-
     vec3 totalIncomingLight = vec3(0.0, 0.0, 0.0);
     for (int i = 0; i < RAYS_PER_PIXEL; i++)
     {
-        // make a new ray with a slightly deviated angle (offset by 1 px)
+        float planeWidth = ViewParams.x;
         Ray newRay;
-        newRay.dir = normalize(rayVec + (vec3(randomValue(rngState), randomValue(rngState), 0.0) * 2.0 - 1) * 0.3);
+
+        // vec3 depthOfFieldOffset = vec3(randomValue(rngState), randomValue(rngState), 0.0) * depthOfFieldStrength;
+        vec3 antialiasOffset = (vec3(randomValue(rngState), randomValue(rngState), 0.0) * 2.0 / 230.0 * planeWidth - 1) * 0.3;
+
+        // make a new ray with a slightly deviated angle. 2.0 * 0.3 looks pretty nice?
+        // newRay.dir = normalize(rayVec + antialiasOffset - depthOfFieldOffset);
+        // newRay.origin = ray.origin.xyz + depthOfFieldOffset;
+
+        // newRay.dir = normalize(rayVec + antialiasOffset);
+        newRay.dir = ray.dir.xyz;
         newRay.origin = ray.origin.xyz;
 
-        totalIncomingLight += traceRay(newRay, rngState);
-        // totalIncomingLight += traceRay(ray, rngState);
+        // totalIncomingLight += traceRay(newRay, rngState);
+        totalIncomingLight += traceRay(ray, rngState);
     }
 
     totalIncomingLight /= RAYS_PER_PIXEL;

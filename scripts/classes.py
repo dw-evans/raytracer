@@ -283,7 +283,7 @@ class Camera:
     def __init__(self) -> None:
         self.fov = 30.0  # degrees
         self.aspect = 16.0 / 9.0
-        self.near_plane = 240.0
+        self.near_plane = 1000
         # self.pos = Vector3((0.0, 0.0, 0.0), dtype="f4")
 
         # TODO investigate these, they don't match intent
@@ -422,18 +422,18 @@ class Csys:
         return self
 
     def txp(self, dst: float) -> Csys:
-        ax = Vector3(self.rotation_matrix.c1)
+        ax = Vector3(self.rotation_matrix.r1)
         print(f"txp: {dst * ax}")
         self.pos += dst * ax
         return self
 
     def typ(self, dst: float) -> Csys:
-        ax = Vector3(self.rotation_matrix.c2)
+        ax = Vector3(self.rotation_matrix.r2)
         self.pos += dst * ax
         return self
 
     def tzp(self, dst: float) -> Csys:
-        ax = Vector3(self.rotation_matrix.c3)
+        ax = Vector3(self.rotation_matrix.r3)
         print(f"tzp: {dst * ax}")
         self.pos += dst * ax
         return self

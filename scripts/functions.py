@@ -265,7 +265,7 @@ def convert_screen_coords_to_camera_ray(
 
     x2 = x1 * Vector4((*cam.view_params, 1.0))
 
-    x3: Vector3 = cam.local_to_world_matrix * x2
+    x3: Vector4 = cam.local_to_world_matrix.transpose() * x2
 
     ray = Ray()
     direction = Vector3(x3.xyz)

@@ -60,13 +60,13 @@ WINDOW_HEIGHT = 540
 ASPECT_RATIO = 16.0 / 9.0
 SCALE_FACTOR = 1
 
-STATIC_RENDER = True
+STATIC_RENDER = False
 STATIC_RENDER_ANIMATION = False
 
 DYNAMIC_RENDER_FRAMERATE = 60
 
-MAX_RAY_BOUNCES = 3
-RAYS_PER_PIXEL = 8
+MAX_RAY_BOUNCES = 2
+RAYS_PER_PIXEL = 16
 
 STATIC_RENDER_FRAMERATE = 144
 STATIC_RENDER_CYCLES_PER_FRAME = 256
@@ -75,6 +75,7 @@ STATIC_RENDER_TIME_DURATION = 2.0
 CAMERA_LINEAR_SPEED = 3.0  # units per second
 CAMERA_ANGULAR_SPEED = 5.0  # degrees per second per 1 px of movement
 CAMERA_SCROLL_SPEED = 20.0
+CAMERA_ROLL_SPEED = 20.0
 
 dt = 1 / STATIC_RENDER_FRAMERATE
 n_frames = STATIC_RENDER_FRAMERATE * STATIC_RENDER_TIME_DURATION
@@ -238,6 +239,10 @@ MOUSE_LAST_POS_X = 0
 MOUSE_LAST_POS_Y = 0
 
 
+CAM_FOCUS_PLANE = 240  # m
+CAM_DEPTH_OF_FIELD_STRENGTH = 0.00  # m/
+
+
 def main_loop():
     global SELECTED_MESH_ID
     global triangles_ssbo
@@ -329,6 +334,10 @@ def main_loop():
         program["materialBuffer"].binding = material_buffer_binding
         material_buffer.bind_to_uniform_block(material_buffer_binding)
 
+        # program["depthOfFieldStrength"].write(
+        #     struct.pack("f", CAM_DEPTH_OF_FIELD_STRENGTH)
+        # )
+
     elif PROGRAM == ShaderProgram.DUMB:
         # program["STATIC_RENDER"].write(struct.pack("i", STATIC_RENDER))
         # program["MAX_BOUNCES"].write(struct.pack("i", MAX_RAY_BOUNCES))
@@ -390,6 +399,7 @@ def main_loop():
     cam_angular_speed_adjusted = 1 / DYNAMIC_RENDER_FRAMERATE * CAMERA_ANGULAR_SPEED
     screen_center = (WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2)
     cam_scroll_speed_adjusted = 1 / DYNAMIC_RENDER_FRAMERATE * CAMERA_SCROLL_SPEED
+    cam_roll_speed_adjusted = 1 / DYNAMIC_RENDER_FRAMERATE * CAMERA_ROLL_SPEED
 
     running = True
     if not STATIC_RENDER_ANIMATION:
@@ -413,9 +423,9 @@ def main_loop():
                         if key_state[pygame.K_a]:
                             cam.csys.txp(-1 * cam_linear_speed_adjusted)
                         if key_state[pygame.K_q]:
-                            pass
+                            cam.csys.rzp(-1 * cam_roll_speed_adjusted)
                         if key_state[pygame.K_e]:
-                            pass
+                            cam.csys.rzp(cam_roll_speed_adjusted)
                         if key_state[pygame.K_SPACE]:
                             cam.csys.tyg(1 * cam_linear_speed_adjusted)
                         if key_state[pygame.K_LCTRL]:
@@ -501,8 +511,8 @@ def main_loop():
 
                     print(f"mouse_dx, mouse_dy = {mouse_dx, mouse_dy}")
 
-                    dyaw = mouse_dx * cam_angular_speed_adjusted
-                    dpitch = mouse_dy * cam_angular_speed_adjusted
+                    dyaw = -1 * mouse_dx * cam_angular_speed_adjusted
+                    dpitch = -1 * mouse_dy * cam_angular_speed_adjusted
 
                     print(f"dyaw, dpitch = {dyaw, dpitch}")
 
@@ -525,6 +535,11 @@ def main_loop():
                     cam.local_to_world_matrix.astype("f4")
                 )
                 program["CamGlobalPos"].write(cam.csys.pos.astype("f4"))
+
+                cam.near_plane = 50 + 40 * sin(
+                    pygame.time.get_ticks() / np.float32(1000.0)
+                )
+                print(cam.near_plane)
 
                 sphere_bytes = iter_to_bytes(spheres)
                 sphere_buffer = ctx.buffer(sphere_bytes)
@@ -576,7 +591,7 @@ def listener_loop():
     global MODIFY_COMMAND
     global MODIFICATION_WAITING
 
-    import regex as re      
+    import regex as re
 
     # valid_methods = [x for x in dir(Csys) if re.match(r"[rt]\w\w")]
     valid_methods = dir(Csys)
@@ -605,7 +620,10 @@ def listener_loop():
 
         print(f"command recognised modifying mesh with command `{command}`")
 
-        msh.csys.__getattribute__(match.group(1))(float(match.group(2)))
+        try:
+            msh.csys.__getattribute__(match.group(1))(float(match.group(2)))
+        except Exception as e:
+            print(f"TRANSFORMATION FAILED: {e}")
 
         # write the modify command into a lambda that can be called.
         # quite cursed but gets the job done
