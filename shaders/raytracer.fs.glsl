@@ -35,6 +35,7 @@ uniform vec3 groundColor;
 uniform int selectedMeshId;
 
 uniform float depthOfFieldStrength;
+uniform float antialiasStrength;
 
 float inf = 1.0 / 0.0;
 float pi = 3.14159265359;
@@ -465,11 +466,7 @@ void main()
     ray.origin = CamGlobalPos;
     ray.dir = normalize(viewPoint);
 
-    vec3 rayVec = viewPoint - ray.origin;
-    // rayVec.x = rayVec.x + randomValue(rngState) * 1;
-    // rayVec.y = rayVec.y + randomValue(rngState) * 1;
-
-
+    float camNearPlane = ViewParams.z;
 
     vec3 totalIncomingLight = vec3(0.0, 0.0, 0.0);
     for (int i = 0; i < RAYS_PER_PIXEL; i++)
@@ -477,19 +474,18 @@ void main()
         float planeWidth = ViewParams.x;
         Ray newRay;
 
-        // vec3 depthOfFieldOffset = vec3(randomValue(rngState), randomValue(rngState), 0.0) * depthOfFieldStrength;
-        vec3 antialiasOffset = (vec3(randomValue(rngState), randomValue(rngState), 0.0) * 2.0 / 230.0 * planeWidth - 1) * 0.3;
+        vec3 depthOfFieldOffset = (vec3(randomValue(rngState), randomValue(rngState), 0.0) * 2.0 - 1.0) * depthOfFieldStrength * camNearPlane;
+        vec3 antialiasOffset = (vec3(randomValue(rngState), randomValue(rngState), 0.0) * 2.0 - 1.0) * antialiasStrength;
 
         // make a new ray with a slightly deviated angle. 2.0 * 0.3 looks pretty nice?
         // newRay.dir = normalize(rayVec + antialiasOffset - depthOfFieldOffset);
         // newRay.origin = ray.origin.xyz + depthOfFieldOffset;
 
-        // newRay.dir = normalize(rayVec + antialiasOffset);
-        newRay.dir = ray.dir.xyz;
-        newRay.origin = ray.origin.xyz;
+        newRay.dir = normalize(viewPoint + depthOfFieldOffset + antialiasOffset);
+        newRay.origin = ray.origin.xyz - depthOfFieldOffset;
 
-        // totalIncomingLight += traceRay(newRay, rngState);
-        totalIncomingLight += traceRay(ray, rngState);
+        totalIncomingLight += traceRay(newRay, rngState);
+        // totalIncomingLight += traceRay(ray, rngState);
     }
 
     totalIncomingLight /= RAYS_PER_PIXEL;

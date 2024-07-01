@@ -256,9 +256,9 @@ class Mesh(ByteableObject):
             v0, v1, v2 = (Vector3(x) for x in facet[1])
             tris.append(
                 Triangle(
-                    posA=v0,
-                    posB=v1,
-                    posC=v2,
+                    v0,
+                    v2,
+                    v1,
                     normalA=normal,
                     normalB=normal,
                     normalC=normal,

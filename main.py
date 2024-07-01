@@ -509,12 +509,12 @@ def main_loop():
                     MOUSE_LAST_POS_X = mouse_x
                     MOUSE_LAST_POS_Y = mouse_y
 
-                    print(f"mouse_dx, mouse_dy = {mouse_dx, mouse_dy}")
+                    # print(f"mouse_dx, mouse_dy = {mouse_dx, mouse_dy}")
 
                     dyaw = -1 * mouse_dx * cam_angular_speed_adjusted
                     dpitch = -1 * mouse_dy * cam_angular_speed_adjusted
 
-                    print(f"dyaw, dpitch = {dyaw, dpitch}")
+                    # print(f"dyaw, dpitch = {dyaw, dpitch}")
 
                     # dyaw = 1
                     # dpitch = 1
@@ -536,10 +536,18 @@ def main_loop():
                 )
                 program["CamGlobalPos"].write(cam.csys.pos.astype("f4"))
 
-                cam.near_plane = 50 + 40 * sin(
-                    pygame.time.get_ticks() / np.float32(1000.0)
-                )
+                time = pygame.time.get_ticks() / np.float32(1000.0)
+                cam.near_plane = 15 + 8 * sin(time / 3)
                 print(cam.near_plane)
+
+                CAM_DEPTH_OF_FIELD_STRENGTH = 0.000
+                program["depthOfFieldStrength"].write(
+                    struct.pack("f", CAM_DEPTH_OF_FIELD_STRENGTH)
+                )
+                CAM_ANTIALIAS_STRENGTH = 0.001
+                program["depthOfFieldStrength"].write(
+                    struct.pack("f", CAM_ANTIALIAS_STRENGTH)
+                )
 
                 sphere_bytes = iter_to_bytes(spheres)
                 sphere_buffer = ctx.buffer(sphere_bytes)
