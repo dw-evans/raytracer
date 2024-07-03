@@ -56,11 +56,11 @@ os.chdir(Path(__file__).parent)
 
 PROGRAM = ShaderProgram.RAYTRACER
 
-WINDOW_HEIGHT = 540
+WINDOW_HEIGHT = 1080
 ASPECT_RATIO = 16.0 / 9.0
 SCALE_FACTOR = 1
 
-STATIC_RENDER = False
+STATIC_RENDER = True
 STATIC_RENDER_ANIMATION = False
 
 DYNAMIC_RENDER_FRAMERATE = 60
@@ -97,6 +97,8 @@ WINDOW_WIDTH = int(WINDOW_HEIGHT * ASPECT_RATIO)
 
 scene = Scene()
 cam = scene.cam
+cam.csys.pos.z -= 5
+cam.fov = 45
 cam.aspect = ASPECT_RATIO
 
 h = WINDOW_HEIGHT
@@ -238,7 +240,6 @@ MMB_PRESSED = False
 MOUSE_LAST_POS_X = 0
 MOUSE_LAST_POS_Y = 0
 
-
 CAM_FOCUS_PLANE = 240  # m
 CAM_DEPTH_OF_FIELD_STRENGTH = 0.00  # m/
 
@@ -246,7 +247,7 @@ CAM_DEPTH_OF_FIELD_STRENGTH = 0.00  # m/
 def main_loop():
     global SELECTED_MESH_ID
     global triangles_ssbo
-    global ctx
+    global ctx1
     global MODIFICATION_WAITING
     global MODIFY_COMMAND
     global MMB_PRESSED
@@ -265,52 +266,65 @@ def main_loop():
     with open(f"shaders/{PROGRAM}.vs.glsl") as f:
         shader_vertex = f.read()
 
-    ctx = moderngl.create_context()
-
-    program = ctx.program(
+    ctx1 = moderngl.create_context(require=460)
+    prog1 = ctx1.program(
         vertex_shader=shader_vertex,
         fragment_shader=shader_fragment,
     )
-
-    buffer1 = ctx.buffer(vertices.tobytes())
-
-    vao = ctx.vertex_array(
-        program,
+    buffer1 = ctx1.buffer(vertices.tobytes())
+    vao1 = ctx1.vertex_array(
+        prog1,
         [
             (buffer1, "3f", "position"),
         ],
     )
 
-    if PROGRAM == ShaderProgram.RAYTRACER:
-        program["STATIC_RENDER"].write(struct.pack("i", STATIC_RENDER))
-        program["MAX_BOUNCES"].write(struct.pack("i", MAX_RAY_BOUNCES))
-        program["RAYS_PER_PIXEL"].write(struct.pack("i", RAYS_PER_PIXEL))
+    # CTX2_HEIGHT = 1080
+    # CTX2_WIDTH = int(CTX2_HEIGHT * cam.aspect)
+    # ctx2 = moderngl.create_context(standalone=True, require=460)
+    # prog2 = ctx2.program(
+    #     vertex_shader=shader_vertex,
+    #     fragment_shader=shader_fragment,
+    # )
+    # vbo2 = ctx2.buffer(vertices.tobytes())
+    # vao2 = ctx2.vertex_array(
+    #     prog2,
+    #     [
+    #         (vbo2, "3f", "position"),
+    #     ],
+    # )
+    # fbo2 = ctx2.framebuffer(color_attachments=[ctx2.texture(())])
 
-        texture = ctx.texture((w, h), 3)
+    if PROGRAM == ShaderProgram.RAYTRACER:
+        prog1["STATIC_RENDER"].write(struct.pack("i", STATIC_RENDER))
+        prog1["MAX_BOUNCES"].write(struct.pack("i", MAX_RAY_BOUNCES))
+        prog1["RAYS_PER_PIXEL"].write(struct.pack("i", RAYS_PER_PIXEL))
+
+        texture = ctx1.texture((w, h), 3)
         texture.use(location=1)
-        program["previousFrame"] = 1
+        prog1["previousFrame"] = 1
         render_data = b"\x00" * w * h * 3
 
         # initialise the uniforms
-        program["screenWidth"].write(struct.pack("i", w))
-        program["screenHeight"].write(struct.pack("i", h))
+        prog1["screenWidth"].write(struct.pack("i", w))
+        prog1["screenHeight"].write(struct.pack("i", h))
 
-        program["spheresCount"].write(struct.pack("i", len(spheres)))
+        prog1["spheresCount"].write(struct.pack("i", len(spheres)))
         sphere_buffer_binding = 1
-        program["sphereBuffer"].binding = sphere_buffer_binding
+        prog1["sphereBuffer"].binding = sphere_buffer_binding
 
         # cam.pos.z += -4
         # cam.csys.pos.z += -4
 
         triangles = scene.triangles
         n_triangles = len(triangles)
-        program["triCount"].write(struct.pack("i", n_triangles))
+        prog1["triCount"].write(struct.pack("i", n_triangles))
 
-        program["meshCount"].write(struct.pack("i", len(scene.meshes)))
+        prog1["meshCount"].write(struct.pack("i", len(scene.meshes)))
 
         # tri_buffer_length_max = 455
 
-        triangles_ssbo = ctx.buffer(
+        triangles_ssbo = ctx1.buffer(
             iter_to_bytes(
                 [t.update_pos_with_mesh2() for t in scene.triangles],
             )
@@ -319,19 +333,19 @@ def main_loop():
         triangles_ssbo.bind_to_storage_buffer(binding=triangles_ssbo_binding)
         # program["triBuffer"].binding = triangles_ssbo_binding
 
-        mesh_buffer = ctx.buffer(iter_to_bytes(scene.meshes))
+        mesh_buffer = ctx1.buffer(iter_to_bytes(scene.meshes))
         mesh_buffer_binding = 10
-        program["meshBuffer"].binding = mesh_buffer_binding
+        prog1["meshBuffer"].binding = mesh_buffer_binding
         mesh_buffer.bind_to_uniform_block(mesh_buffer_binding)
 
         sky_color = Vector3((131, 200, 228), dtype="f4") / 255
         ground_color = Vector3((74, 112, 45), dtype="f4") / 255
 
-        program["skyColor"].write(struct.pack("3f", *sky_color))
+        prog1["skyColor"].write(struct.pack("3f", *sky_color))
 
-        material_buffer = ctx.buffer(iter_to_bytes([highlight_material]))
+        material_buffer = ctx1.buffer(iter_to_bytes([highlight_material]))
         material_buffer_binding = 11
-        program["materialBuffer"].binding = material_buffer_binding
+        prog1["materialBuffer"].binding = material_buffer_binding
         material_buffer.bind_to_uniform_block(material_buffer_binding)
 
         # program["depthOfFieldStrength"].write(
@@ -352,22 +366,22 @@ def main_loop():
         # program["screenWidth"].write(struct.pack("i", w))
         # program["screenHeight"].write(struct.pack("i", h))
 
-        program["spheresCount"].write(struct.pack("i", len(spheres)))
+        prog1["spheresCount"].write(struct.pack("i", len(spheres)))
         sphere_buffer_binding = 1
-        program["sphereBuffer"].binding = sphere_buffer_binding
+        prog1["sphereBuffer"].binding = sphere_buffer_binding
 
         # cam.pos.z += -4
         # cam.csys.pos.z += -4
 
         triangles = scene.triangles
         n_triangles = len(triangles)
-        program["triCount"].write(struct.pack("i", n_triangles))
+        prog1["triCount"].write(struct.pack("i", n_triangles))
 
-        program["meshCount"].write(struct.pack("i", len(scene.meshes)))
+        prog1["meshCount"].write(struct.pack("i", len(scene.meshes)))
 
         # tri_buffer_length_max = 455
 
-        triangles_ssbo = ctx.buffer(
+        triangles_ssbo = ctx1.buffer(
             iter_to_bytes(
                 [t.update_pos_with_mesh2() for t in scene.triangles],
             )
@@ -376,15 +390,15 @@ def main_loop():
         triangles_ssbo.bind_to_storage_buffer(binding=triangles_ssbo_binding)
         # program["triBuffer"].binding = triangles_ssbo_binding
 
-        mesh_buffer = ctx.buffer(iter_to_bytes(scene.meshes))
+        mesh_buffer = ctx1.buffer(iter_to_bytes(scene.meshes))
         mesh_buffer_binding = 10
-        program["meshBuffer"].binding = mesh_buffer_binding
+        prog1["meshBuffer"].binding = mesh_buffer_binding
         mesh_buffer.bind_to_uniform_block(mesh_buffer_binding)
 
         sky_color = Vector3((131, 200, 228), dtype="f4") / 255
         ground_color = Vector3((74, 112, 45), dtype="f4") / 255
 
-        program["skyColor"].write(struct.pack("3f", *sky_color))
+        prog1["skyColor"].write(struct.pack("3f", *sky_color))
 
     frame_counter = 0
     cycle_counter = 0
@@ -457,13 +471,13 @@ def main_loop():
                                     obj = hits[0][1]
                                     if isinstance(obj, Triangle):
                                         SELECTED_MESH_ID = obj.parent.mesh_index
-                                        program["selectedMeshId"].write(
+                                        prog1["selectedMeshId"].write(
                                             struct.pack("i", SELECTED_MESH_ID)
                                         )
                                         # print(f"selectedMeshId = {SELECTED_MESH_ID}")
                                 else:
                                     SELECTED_MESH_ID = -1
-                                    program["selectedMeshId"].write(
+                                    prog1["selectedMeshId"].write(
                                         struct.pack("i", SELECTED_MESH_ID)
                                     )
                             # middle mouse button
@@ -479,48 +493,48 @@ def main_loop():
                                 # set the flag
                                 MMB_PRESSED = True
 
-                    if event.type == pygame.MOUSEBUTTONUP:
-                        if event.button == 1:
-                            pass
-                        elif event.button == 2:
+                        if event.type == pygame.MOUSEBUTTONUP:
+                            if event.button == 1:
+                                pass
+                            elif event.button == 2:
+                                MOUSE_LAST_POS_X = mouse_x
+                                MOUSE_LAST_POS_Y = mouse_y
+
+                                # pygame.mouse.set_pos((MOUSE_LAST_POS_X, MOUSE_LAST_POS_Y))
+
+                                # MOUSE_LAST_POS_X, MOUSE_LAST_POS_Y = mouse_x, mouse_y
+                                # release the mouse!
+                                # pygame.event.set_grab(False)
+                                # pygame.mouse.set_visible(True)
+                                MMB_PRESSED = False
+
+                        if event.type == pygame.MOUSEWHEEL:
+                            scroll = event.precise_y
+
+                            scene.cam.fov += -1 * scroll * cam_scroll_speed_adjusted
+
+                        if MMB_PRESSED:
+                            # pygame.mouse.set_pos(screen_center)
+                            # mouse_dx, mouse_dy = pygame.mouse.get_rel()
+
+                            mouse_dx = mouse_x - MOUSE_LAST_POS_X
+                            mouse_dy = mouse_y - MOUSE_LAST_POS_Y
+
                             MOUSE_LAST_POS_X = mouse_x
                             MOUSE_LAST_POS_Y = mouse_y
 
-                            # pygame.mouse.set_pos((MOUSE_LAST_POS_X, MOUSE_LAST_POS_Y))
+                            # print(f"mouse_dx, mouse_dy = {mouse_dx, mouse_dy}")
 
-                            # MOUSE_LAST_POS_X, MOUSE_LAST_POS_Y = mouse_x, mouse_y
-                            # release the mouse!
-                            # pygame.event.set_grab(False)
-                            # pygame.mouse.set_visible(True)
-                            MMB_PRESSED = False
+                            dyaw = -1 * mouse_dx * cam_angular_speed_adjusted
+                            dpitch = -1 * mouse_dy * cam_angular_speed_adjusted
 
-                    if event.type == pygame.MOUSEWHEEL:
-                        scroll = event.precise_y
+                            # print(f"dyaw, dpitch = {dyaw, dpitch}")
 
-                        scene.cam.fov += -1 * scroll * cam_scroll_speed_adjusted
+                            # dyaw = 1
+                            # dpitch = 1
 
-                if MMB_PRESSED:
-                    # pygame.mouse.set_pos(screen_center)
-                    # mouse_dx, mouse_dy = pygame.mouse.get_rel()
-
-                    mouse_dx = mouse_x - MOUSE_LAST_POS_X
-                    mouse_dy = mouse_y - MOUSE_LAST_POS_Y
-
-                    MOUSE_LAST_POS_X = mouse_x
-                    MOUSE_LAST_POS_Y = mouse_y
-
-                    # print(f"mouse_dx, mouse_dy = {mouse_dx, mouse_dy}")
-
-                    dyaw = -1 * mouse_dx * cam_angular_speed_adjusted
-                    dpitch = -1 * mouse_dy * cam_angular_speed_adjusted
-
-                    # print(f"dyaw, dpitch = {dyaw, dpitch}")
-
-                    # dyaw = 1
-                    # dpitch = 1
-
-                    cam.csys.ryp(dyaw)
-                    cam.csys.rxp(dpitch)
+                            cam.csys.ryp(dyaw)
+                            cam.csys.rxp(dpitch)
 
                 if STATIC_RENDER:
                     time = 0
@@ -528,29 +542,29 @@ def main_loop():
                     time = pygame.time.get_ticks() / np.float32(1000.0)
 
                 if PROGRAM == ShaderProgram.RAYTRACER:
-                    program["frameNumber"].write(struct.pack("I", shader_rng_counter))
+                    prog1["frameNumber"].write(struct.pack("I", shader_rng_counter))
 
-                program["ViewParams"].write(cam.view_params.astype("f4"))
-                program["CamLocalToWorldMatrix"].write(
+                prog1["ViewParams"].write(cam.view_params.astype("f4"))
+                prog1["CamLocalToWorldMatrix"].write(
                     cam.local_to_world_matrix.astype("f4")
                 )
-                program["CamGlobalPos"].write(cam.csys.pos.astype("f4"))
+                prog1["CamGlobalPos"].write(cam.csys.pos.astype("f4"))
 
                 time = pygame.time.get_ticks() / np.float32(1000.0)
                 cam.near_plane = 15 + 8 * sin(time / 3)
                 print(cam.near_plane)
 
                 CAM_DEPTH_OF_FIELD_STRENGTH = 0.000
-                program["depthOfFieldStrength"].write(
+                prog1["depthOfFieldStrength"].write(
                     struct.pack("f", CAM_DEPTH_OF_FIELD_STRENGTH)
                 )
                 CAM_ANTIALIAS_STRENGTH = 0.001
-                program["depthOfFieldStrength"].write(
+                prog1["depthOfFieldStrength"].write(
                     struct.pack("f", CAM_ANTIALIAS_STRENGTH)
                 )
 
                 sphere_bytes = iter_to_bytes(spheres)
-                sphere_buffer = ctx.buffer(sphere_bytes)
+                sphere_buffer = ctx1.buffer(sphere_bytes)
                 sphere_buffer.bind_to_uniform_block(sphere_buffer_binding)
 
                 # tri_bytes = iter_to_bytes(triangles)
@@ -565,10 +579,10 @@ def main_loop():
                 # triangles_ssbo_binding = 9
                 # triangles_ssbo.bind_to_storage_buffer(binding=triangles_ssbo_binding)
 
-                vao.render(mode=moderngl.TRIANGLE_STRIP)
+                vao1.render(mode=moderngl.TRIANGLE_STRIP)
 
                 if PROGRAM == ShaderProgram.RAYTRACER:
-                    render_data = ctx.screen.read(components=3, dtype="f1")
+                    render_data = ctx1.screen.read(components=3, dtype="f1")
                     texture.write(render_data)
 
                 shader_rng_counter += 1
@@ -579,14 +593,18 @@ def main_loop():
 
                 pass
 
+            ctx1
+
             # extract the image
-            render_data2 = ctx.screen.read(components=3, dtype="f2")
+            render_data2 = ctx1.screen.read(components=3, dtype="f2")
             img = buffer_to_image_float16(render_data2, (w, h))
             # save the image to the renders folder
             img.save(dir_render / f"{frame_counter:05}.png")
 
             shader_rng_counter = 0
             cycle_counter = 0
+
+            ctx1.gc()
 
         except KeyboardInterrupt:
             pass
@@ -595,7 +613,7 @@ def main_loop():
 def listener_loop():
     global SELECTED_MESH_ID
     global triangles_ssbo
-    global ctx
+    global ctx1
     global MODIFY_COMMAND
     global MODIFICATION_WAITING
 
@@ -626,7 +644,7 @@ def listener_loop():
             print(f"{match.group(1)} is not a valid command")
             continue
 
-        print(f"command recognised modifying mesh with command `{command}`")
+        print(f"Command recognised. Modifying mesh with command `{command}`")
 
         try:
             msh.csys.__getattribute__(match.group(1))(float(match.group(2)))
@@ -634,7 +652,7 @@ def listener_loop():
             print(f"TRANSFORMATION FAILED: {e}")
 
         # write the modify command into a lambda that can be called.
-        # quite cursed but gets the job done
+        # quite cursed but gets the job donefd
         MODIFY_COMMAND = lambda: triangles_ssbo.write(
             iter_to_bytes(
                 [t.update_pos_with_mesh2() for t in scene.triangles],
