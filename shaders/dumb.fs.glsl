@@ -415,12 +415,11 @@ vec3 traceRay(Ray ray)
 void main() 
 {
     vec3 viewPointLocal = (vec3(fragPosition.xy / 2.0, 1) * ViewParams);
-    vec3 viewPoint = (CamLocalToWorldMatrix * vec4(viewPointLocal.xyz, 1.0)).xyz;
+    vec3 viewPoint = (transpose(CamLocalToWorldMatrix) * vec4(viewPointLocal.xyz, 1.0)).xyz;
 
     Ray ray;
     ray.origin = CamGlobalPos;
-    ray.dir = normalize(viewPoint - ray.origin);
-
+    ray.dir = normalize(viewPoint);
 
     vec3 totalIncomingLight = traceRay(ray);
 

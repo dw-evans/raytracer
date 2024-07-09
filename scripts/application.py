@@ -43,29 +43,62 @@ from scripts.scenes import basic_scene
 
 
 class Application:
-    # window params
-    DYNAMIC_RENDER_FRAMERATE = 60
-    WINDOW_HEIGHT = 540
-    ASPECT_RATIO = 16 / 9
 
-    # mouse / keyboard movement camera speeds
-    CAMERA_LINEAR_SPEED = 3.0
-    CAMERA_ANGULAR_SPEED = 5.0
-    CAMERA_SCROLL_SPEED = 20.0
-    CAMERA_ROLL_SPEED = 20.0
+    def __init__(
+        self,
+    ) -> None:
+        # window params
+        self.DYNAMIC_RENDER_FRAMERATE = 60
+        self.WINDOW_HEIGHT = 540
+        self.ASPECT_RATIO = 16 / 9
 
-    # opengl data
-    display_program: ProgramABC = None
-    programs: dict[str, ProgramABC] = {}
-    display_scene: Scene = None
-    scenes: dict[str, Scene] = {}
+        # mouse / keyboard movement camera speeds
+        self.CAMERA_LINEAR_SPEED = 3.0
+        self.CAMERA_ANGULAR_SPEED = 5.0
+        self.CAMERA_SCROLL_SPEED = 20.0
+        self.CAMERA_ROLL_SPEED = 20.0
 
-    input_thread: threading.Thread = None
+        # opengl data
+        self.display_program: ProgramABC = None
+        self.programs: dict[str, ProgramABC] = {}
+        self.display_scene: Scene = None
+        self.scenes: dict[str, Scene] = {}
 
-    RUNNING: bool = False
+        self.input_thread: threading.Thread = None
 
-    clock: pygame.time.Clock
-    screen: pygame.Surface
+        self.running: bool = False
+
+        self.clock: pygame.time.Clock = None
+        self.screen: pygame.Surface = None
+
+        self.MOUSE_LAST_POS: list[float] = [0, 0]
+        self.MMB_PRESSED: bool = False
+
+        pygame.init()
+
+        self.screen = pygame.display.set_mode(
+            (self.WINDOW_WIDTH, self.WINDOW_HEIGHT),
+            pygame.OPENGL | pygame.DOUBLEBUF,
+        )
+        self.clock = pygame.time.Clock()
+        self.display_scene = basic_scene.scene
+
+        self.register_program(
+            DefaultShaderProgram(
+                app=self,
+                file_fragment_shader="shaders/dumb.fs.glsl",
+                file_vertex_shader="shaders/dumb.vs.glsl",
+                width=self.WINDOW_HEIGHT,
+                height=self.WINDOW_HEIGHT,
+            ),
+        )
+
+    def start(self):
+        self.running = True
+        self.run()
+
+    def end(self):
+        self.running = False
 
     @property
     def WINDOW_WIDTH(self):
@@ -91,30 +124,6 @@ class Application:
     def cam_roll_speed_adjusted(self):
         return 1 / self.DYNAMIC_RENDER_FRAMERATE * self.CAMERA_ROLL_SPEED
 
-    def __init__(
-        self,
-    ) -> None:
-        pygame.init()
-
-        Application.screen = pygame.display.set_mode(
-            (self.WINDOW_WIDTH, self.WINDOW_HEIGHT),
-            pygame.OPENGL | pygame.DOUBLEBUF,
-        )
-        Application.clock = pygame.time.Clock()
-        self.display_scene = basic_scene.scene
-
-        self.register_program(
-            DefaultShaderProgram(
-                file_fragment_shader="shaders/dumb.fs.glsl",
-                file_vertex_shader="shaders/dumb.vs.glsl",
-                width=self.WINDOW_HEIGHT,
-                height=self.WINDOW_HEIGHT,
-            ),
-        )
-
-        self.RUNNING = True
-        self.run()
-
     def register_program(self, program: ProgramABC):
         if not program in self.programs.keys():
             self.programs[program.name] = program
@@ -129,35 +138,37 @@ class Application:
         # configure the program and then run it
         self.display_program.configure_program(self.display_scene)
         # try:
-        while self.RUNNING:
+        while self.running:
             self.display_program.handle_interactions(
+                self.screen,
                 self.display_scene.cam,
                 self.display_scene,
-                True,
-                True,
+                keyboard_enabled=True,
+                mouse_enabled=True,
             )
             self.display_program.calculate_frame(self.display_scene)
             pygame.display.flip()
-            Application.clock.tick(Application.DYNAMIC_RENDER_FRAMERATE)
+            self.clock.tick(self.DYNAMIC_RENDER_FRAMERATE)
         # except Exception as e:
         #     print(f"Exception occurred: {e}")
 
 
 def animate_csys(
     obj: Csys,
-    function: callable,
+    f_t: callable,
     dt: float,
     quat0: Quaternion | None = None,
     quat1: Quaternion | None = None,
     pos0: Vector3 | None = None,
     pos1: Vector3 | None = None,
 ) -> Generator[Csys]:
-
-    raise NotImplementedError
-    yield obj
+    pass
 
 
 class ProgramABC(ABC):
+    """Abstract base for a program"""
+
+    app: Application
     name: str
 
     context: moderngl.Context
@@ -180,6 +191,7 @@ class ProgramABC(ABC):
 
     def __init__(
         self,
+        app: Application,
         file_vertex_shader: str,
         file_fragment_shader: str,
         width: int,
@@ -188,7 +200,7 @@ class ProgramABC(ABC):
         require=460,
     ) -> None:
         super().__init__()
-
+        self.app = app
         self.vertices = np.array(
             [
                 -1.0,
@@ -242,7 +254,7 @@ class ProgramABC(ABC):
         self,
         file_fragment_shader: str,
         file_vertex_shader: str,
-    ):
+    ) -> None:
         with open(file_fragment_shader) as f:
             self.fragment_shader = f.read()
         with open(file_vertex_shader) as f:
@@ -262,6 +274,7 @@ class ProgramABC(ABC):
 
     def handle_interactions(
         self,
+        screen: pygame.Surface,
         cam: Camera,
         scene: Scene,
         keyboard_enabled: bool,
@@ -275,6 +288,7 @@ class DefaultShaderProgram(ProgramABC):
 
     def __init__(
         self,
+        app: Application,
         file_vertex_shader: str,
         file_fragment_shader: str,
         width: int,
@@ -283,6 +297,7 @@ class DefaultShaderProgram(ProgramABC):
         require=460,
     ) -> None:
         super().__init__(
+            app,
             file_vertex_shader,
             file_fragment_shader,
             width,
@@ -338,9 +353,9 @@ class DefaultShaderProgram(ProgramABC):
         program["CamLocalToWorldMatrix"].write(cam.local_to_world_matrix.astype("f4"))
         program["CamGlobalPos"].write(cam.csys.pos.astype("f4"))
 
-        time = pygame.time.get_ticks() / np.float32(1000.0)
+        # time = pygame.time.get_ticks() / np.float32(1000.0)
 
-        cam.csys.pos.x = 0 + 2.0 * sin(time)
+        # cam.csys.pos.x = 0 + 2.0 * sin(time)
 
         # CAM_DEPTH_OF_FIELD_STRENGTH = 0.000
         # prog1["depthOfFieldStrength"].write(
@@ -363,12 +378,19 @@ class DefaultShaderProgram(ProgramABC):
 
     def handle_interactions(
         self,
+        screen: pygame.Surface,
         cam: Camera,
         scene: Scene,
         keyboard_enabled: bool,
-        mouse_enabled=True,
+        mouse_enabled: bool,
     ):
-        return generic_camera_event_handler(cam, scene, keyboard_enabled, mouse_enabled)
+        return generic_camera_event_handler(
+            app=self.app,
+            cam=cam,
+            scene=scene,
+            keyboard_enabled=keyboard_enabled,
+            mouse_enabled=mouse_enabled,
+        )
 
 
 class RayTracerStatic(ProgramABC):
@@ -458,21 +480,20 @@ class RayTracerStatic(ProgramABC):
         return super().handle_interactions()
 
 
-MMB_PRESSED = False
-
-
 def generic_camera_event_handler(
+    app: Application,
     cam: Camera,
     scene: Scene,
     keyboard_enabled: bool,
-    mouse_enabled=True,
+    mouse_enabled: bool,
 ):
-    global MMB_PRESSED
+    """Basic mouse/keyboard handler function for the application"""
 
-    cam_linear_speed_adjusted = Application.cam_linear_speed_adjusted
-    cam_roll_speed_adjusted = Application.cam_roll_speed_adjusted
-    cam_scroll_speed_adjusted = Application.cam_scroll_speed_adjusted
-    cam_angular_speed_adjusted = Application.cam_angular_speed_adjusted
+    cam_linear_speed_adjusted = app.cam_linear_speed_adjusted
+    cam_roll_speed_adjusted = app.cam_roll_speed_adjusted
+    cam_scroll_speed_adjusted = app.cam_scroll_speed_adjusted
+    cam_angular_speed_adjusted = app.cam_angular_speed_adjusted
+
     mouse_sphere = scene.spheres[-1]
 
     for event in pygame.event.get():
@@ -503,79 +524,58 @@ def generic_camera_event_handler(
 
         if mouse_enabled:
             mouse_x, mouse_y = pygame.mouse.get_pos()
-
             mouse_ray = functions.convert_screen_coords_to_camera_ray(
                 mouse_x,
                 mouse_y,
-                Application.screen.get_width(),
-                Application.screen.get_height(),
+                app.screen.get_width(),
+                app.screen.get_height(),
                 cam=scene.cam,
             )
-
             hits = functions.rayScene(mouse_ray, scene)
-            hits = [h for h in hits if isinstance(h[1], Triangle)]
+            hits = [
+                h
+                for h in hits
+                if isinstance(h[1], Triangle | Sphere) and not h[1] == mouse_sphere
+            ]
             if hits:
-                # print(
-                #     f"n_hits={len(hits)}, {', '.join((str(type(x[1])) for x in hits))}"
-                # )
                 mouse_sphere.pos = hits[0][2]
 
             if event.type == pygame.MOUSEBUTTONDOWN:
-                # right mouse button
-                if event.button == 1:
-                    pass
-                    # if hits:
-                    #     obj = hits[0][1]
-                    #     if isinstance(obj, Triangle):
-                    #         SELECTED_MESH_ID = obj.parent.mesh_index
-                    #         prog1["selectedMeshId"].write(
-                    #             struct.pack("i", SELECTED_MESH_ID)
-                    #         )
-                    #         # print(f"selectedMeshId = {SELECTED_MESH_ID}")
-                    # else:
-                    #     SELECTED_MESH_ID = -1
-                    #     prog1["selectedMeshId"].write(
-                    #         struct.pack("i", SELECTED_MESH_ID)
-                    #     )
                 # middle mouse button
-                elif event.button == 2:
+                if event.button == 2:
                     # store the current position here to reset it later
-                    MOUSE_LAST_POS_X = mouse_x
-                    MOUSE_LAST_POS_Y = mouse_y
-                    MMB_PRESSED = True
+                    app.MOUSE_LAST_POS[0] = mouse_x
+                    app.MOUSE_LAST_POS[1] = mouse_y
+                    # set the flag
+                    app.MMB_PRESSED = True
+                    print("mmb pressed")
 
             if event.type == pygame.MOUSEBUTTONUP:
                 if event.button == 1:
                     pass
                 elif event.button == 2:
-                    MOUSE_LAST_POS_X = mouse_x
-                    MOUSE_LAST_POS_Y = mouse_y
-                    MMB_PRESSED = False
+                    app.MOUSE_LAST_POS[0] = mouse_x
+                    app.MOUSE_LAST_POS[1] = mouse_y
+                    app.MMB_PRESSED = False
 
             if event.type == pygame.MOUSEWHEEL:
                 scroll = event.precise_y
 
-                cam.fov += -1 * scroll * cam_scroll_speed_adjusted
+                scene.cam.fov += -1 * scroll * cam_scroll_speed_adjusted
 
-            if MMB_PRESSED:
-                # pygame.mouse.set_pos(screen_center)
-                # mouse_dx, mouse_dy = pygame.mouse.get_rel()
+            if app.MMB_PRESSED:
 
-                mouse_dx = mouse_x - MOUSE_LAST_POS_X
-                mouse_dy = mouse_y - MOUSE_LAST_POS_Y
+                mouse_dx = mouse_x - app.MOUSE_LAST_POS[0]
+                mouse_dy = mouse_y - app.MOUSE_LAST_POS[1]
 
-                MOUSE_LAST_POS_X = mouse_x
-                MOUSE_LAST_POS_Y = mouse_y
+                app.MOUSE_LAST_POS[0] = mouse_x
+                app.MOUSE_LAST_POS[1] = mouse_y
 
-                # print(f"mouse_dx, mouse_dy = {mouse_dx, mouse_dy}")
+                print(app.MOUSE_LAST_POS)
 
                 dyaw = -1 * mouse_dx * cam_angular_speed_adjusted
                 dpitch = -1 * mouse_dy * cam_angular_speed_adjusted
 
-                # print(f"dyaw, dpitch = {dyaw, dpitch}")
-
-                # dyaw = 1
-                # dpitch = 1
-
-                cam.csys.ryp(dyaw)
+                cam.csys.ryg(dyaw)
                 cam.csys.rxp(dpitch)
+                pass

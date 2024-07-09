@@ -367,43 +367,53 @@ class Csys:
         """Rotate about x' axis"""
         rad = radians(degrees)
         ax = Vector3(self.rotation_matrix.r1)
-        self.quat = self.quat.cross(pyrr.quaternion.create_from_axis_rotation(ax, rad))
+        self.quat = self.quat * pyrr.Quaternion(
+            pyrr.quaternion.create_from_axis_rotation(ax, rad)
+        )
         return self
 
     def ryp(self, degrees: float) -> Csys:
         """Rotate about y' axis"""
         rad = radians(degrees)
         ax = Vector3(self.rotation_matrix.r2)
-        self.quat = self.quat.cross(pyrr.quaternion.create_from_axis_rotation(ax, rad))
+        self.quat = self.quat * pyrr.Quaternion(
+            pyrr.quaternion.create_from_axis_rotation(ax, rad)
+        )
         return self
 
     def rzp(self, degrees: float) -> Csys:
         """Rotate about z' axis"""
         rad = radians(degrees)
         ax = Vector3(self.rotation_matrix.r3)
-        self.quat = self.quat.cross(pyrr.quaternion.create_from_axis_rotation(ax, rad))
+        self.quat = self.quat * pyrr.Quaternion(
+            pyrr.quaternion.create_from_axis_rotation(ax, rad)
+        )
         return self
 
     def rxg(self, degrees: float) -> Csys:
         """Rotate about x global axis"""
         rad = radians(degrees)
         ax = Vector3((1.0, 0.0, 0.0))
-        self.quat = self.quat.cross(pyrr.quaternion.create_from_axis_rotation(ax, rad))
+        self.quat = self.quat * pyrr.Quaternion(
+            pyrr.quaternion.create_from_axis_rotation(ax, rad)
+        )
         return self
 
     def ryg(self, degrees: float) -> Csys:
         """Rotate about y global axis"""
         rad = radians(degrees)
         ax = Vector3((0.0, 1.0, 0.0))
-        self.quat = self.quat.cross(pyrr.quaternion.create_from_axis_rotation(ax, rad))
+        self.quat = self.quat * pyrr.Quaternion(
+            pyrr.quaternion.create_from_axis_rotation(ax, rad)
+        )
         return self
 
     def rzg(self, degrees: float) -> Csys:
         """Rotate about z global axis"""
         rad = radians(degrees)
         ax = Vector3((0.0, 0.0, 1.0))
-        self.quat = self.quat.cross(
-            Vector4(pyrr.quaternion.create_from_axis_rotation(ax, rad))
+        self.quat = self.quat * pyrr.Quaternion(
+            pyrr.quaternion.create_from_axis_rotation(ax, rad)
         )
         return self
 

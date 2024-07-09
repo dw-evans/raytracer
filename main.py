@@ -60,7 +60,7 @@ WINDOW_HEIGHT = 1080
 ASPECT_RATIO = 16.0 / 9.0
 SCALE_FACTOR = 1
 
-STATIC_RENDER = True
+STATIC_RENDER = False
 STATIC_RENDER_ANIMATION = False
 
 DYNAMIC_RENDER_FRAMERATE = 60
@@ -533,7 +533,7 @@ def main_loop():
                             # dyaw = 1
                             # dpitch = 1
 
-                            cam.csys.ryp(dyaw)
+                            cam.csys.ryg(dyaw)
                             cam.csys.rxp(dpitch)
 
                 if STATIC_RENDER:
@@ -543,6 +543,14 @@ def main_loop():
 
                 if PROGRAM == ShaderProgram.RAYTRACER:
                     prog1["frameNumber"].write(struct.pack("I", shader_rng_counter))
+                    CAM_DEPTH_OF_FIELD_STRENGTH = 0.000
+                    prog1["depthOfFieldStrength"].write(
+                        struct.pack("f", CAM_DEPTH_OF_FIELD_STRENGTH)
+                    )
+                    CAM_ANTIALIAS_STRENGTH = 0.001
+                    prog1["depthOfFieldStrength"].write(
+                        struct.pack("f", CAM_ANTIALIAS_STRENGTH)
+                    )
 
                 prog1["ViewParams"].write(cam.view_params.astype("f4"))
                 prog1["CamLocalToWorldMatrix"].write(
@@ -553,15 +561,6 @@ def main_loop():
                 time = pygame.time.get_ticks() / np.float32(1000.0)
                 cam.near_plane = 15 + 8 * sin(time / 3)
                 print(cam.near_plane)
-
-                CAM_DEPTH_OF_FIELD_STRENGTH = 0.000
-                prog1["depthOfFieldStrength"].write(
-                    struct.pack("f", CAM_DEPTH_OF_FIELD_STRENGTH)
-                )
-                CAM_ANTIALIAS_STRENGTH = 0.001
-                prog1["depthOfFieldStrength"].write(
-                    struct.pack("f", CAM_ANTIALIAS_STRENGTH)
-                )
 
                 sphere_bytes = iter_to_bytes(spheres)
                 sphere_buffer = ctx1.buffer(sphere_bytes)
