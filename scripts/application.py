@@ -81,8 +81,9 @@ class Application:
             pygame.OPENGL | pygame.DOUBLEBUF,
         )
         self.clock = pygame.time.Clock()
-        self.display_scene = basic_scene.scene
+        # self.display_scene = basic_scene.scene
         # self.display_scene = basic_scene.scene2
+        self.display_scene = basic_scene.scene3
 
         self.register_program(
             # DefaultShaderProgram(
@@ -332,9 +333,7 @@ class DefaultShaderProgram(ProgramABC):
 
         program["meshCount"].write(struct.pack("i", len(scene.meshes)))
 
-        program["selectedMeshId"].write(
-            struct.pack("i", -1)
-        )
+        program["selectedMeshId"].write(struct.pack("i", -1))
 
         triangles_ssbo = context.buffer(
             functions.iter_to_bytes(

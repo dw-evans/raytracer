@@ -161,3 +161,18 @@ msh2.csys.rzg(90)
 # scene2.meshes.append(msh)
 
 # pass
+
+
+scene3 = Scene()
+
+cube_mesh = Mesh.from_obj(
+    Path() / "objects/smooth_cube.obj",
+    material=material_plain_3,
+)
+
+cube_mesh.csys.tzg(6)
+cube_mesh.csys.ryg(250)
+
+scene3.meshes.append(cube_mesh)
+
+scene3.spheres = spheres

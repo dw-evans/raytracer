@@ -2,7 +2,7 @@ from pathlib import Path
 from stl import mesh
 import numpy as np
 
-file = Path() / "objects/warped_cube.stl"
+file = Path() / "objects/funky_cube.stl"
 
 mesh_data = mesh.Mesh.from_file(file)
 

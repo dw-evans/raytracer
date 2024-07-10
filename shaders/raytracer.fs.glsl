@@ -226,9 +226,12 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
 
     vec3 C;
 
+    float area = length(N) / 2.0;
+
     vec3 edge0 = v1 - v0;
     vec3 vp0 = P - v0;
     C = cross(edge0, vp0);
+    float w = length(C) / 2.0 / area;
     if (dot(N, C) < 0.0)
     {
         hitInfo.didHit = false;
@@ -238,6 +241,7 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
     vec3 edge1 = v2 - v1;
     vec3 vp1 = P - v1;
     C = cross(edge1, vp1);
+    float u = length(C) / 2.0 / area;
     if (dot(N, C) < 0.0)
     {
         hitInfo.didHit = false;
@@ -247,6 +251,7 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
     vec3 edge2 = v0 - v2;
     vec3 vp2 = P - v2;
     C = cross(edge2, vp2);
+    float v = 1 - u - w;
     if (dot(N, C) < 0.0)
     {
         hitInfo.didHit = false;
@@ -254,7 +259,8 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
     }
 
     // hitInfo.normal = tri.normalA;
-    hitInfo.normal = N / float(length(N));
+    // hitInfo.normal = N / float(length(N));
+    hitInfo.normal = tri.normalA * u + tri.normalB * v + tri.normalC * w;
     hitInfo.didHit = true;
     // hitInfo.material = tri.material;
     hitInfo.dst = t;

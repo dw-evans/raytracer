@@ -8,6 +8,7 @@ from numpy import radians, tan, cos, sin
 from stl import mesh
 import copy
 import pyrr
+import trimesh
 
 
 class HitInfo:
@@ -244,10 +245,10 @@ class Mesh(ByteableObject):
 
     # The triangles still don't seem to be working correctly.
     @classmethod
-    def from_stl(self, file: str, material: Material = Material()):
+    def from_stl(cls, file: str, material: Material = Material()):
         """Creates a mesh from a stl file"""
         mesh_data = mesh.Mesh.from_file(file)
-        msh = Mesh()
+        ret = Mesh()
         tris = []
         for facet in mesh_data.data:
             facet: np.ndarray
@@ -266,8 +267,32 @@ class Mesh(ByteableObject):
                     material=material,
                 )
             )
-        msh.add_tri(tris)
-        return msh
+        ret.add_tri(tris)
+        return ret
+
+    @classmethod
+    def from_obj(cls, file: str, material: Material = Material()):
+        msh = trimesh.load(file)
+        ret = Mesh()
+        tris = []
+        for face in msh.faces:
+            vertex_indices = face
+            v0, v1, v2 = msh.vertices[vertex_indices]
+            n0, n1, n2 = msh.vertex_normals[vertex_indices]
+            tris.append(
+                Triangle(
+                    v0,
+                    v1,
+                    v2,
+                    material,
+                    n0,
+                    n1,
+                    n2,
+                    parent=None,
+                )
+            )
+        ret.add_tri(tris)
+        return ret
 
     @property
     def bounding_box(self) -> pyrr.aabb:
