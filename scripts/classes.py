@@ -257,8 +257,8 @@ class Mesh(ByteableObject):
             tris.append(
                 Triangle(
                     v0,
-                    v2,
                     v1,
+                    v2,
                     normalA=normal,
                     normalB=normal,
                     normalC=normal,

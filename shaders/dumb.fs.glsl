@@ -423,9 +423,6 @@ void main()
 
     vec3 totalIncomingLight = traceRay(ray);
 
-    Triangle triangle = getTriangle(0);
-    HitInfo hit = rayTriangle(ray, triangle);
-
     color = vec4(totalIncomingLight, 1.0)
     ;
     

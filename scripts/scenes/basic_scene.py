@@ -128,3 +128,36 @@ msh2 = Mesh.from_stl(
 scene.meshes.append(msh2)
 msh2.csys.tp(Vector3((2, 0.0, 8.0)))
 msh2.csys.rzg(90)
+
+
+# scene2 = Scene()
+# material = Material(
+#     Vector4((1.0, 0.0, 0.0, 1.0), dtype="f4"),
+#     Vector3((0.0, 0.0, 0.0), dtype="f4"),
+#     0.0,
+#     smoothness=0.0,
+# )
+
+# tris = [
+#     Triangle(
+#         Vector3((-1, 0, 6)),
+#         Vector3((0, 0, 6)),
+#         Vector3((0, 1, 6)),
+#         material=material,
+#     ),
+#     Triangle(
+#         Vector3((0, 0, 6)),
+#         Vector3((1, 0, 6)),
+#         Vector3((0, 1, 6)),
+#         material=material,
+#     ),
+# ]
+
+# scene2.spheres = spheres
+
+# msh = Mesh()
+
+# msh.add_tri(tris)
+# scene2.meshes.append(msh)
+
+# pass

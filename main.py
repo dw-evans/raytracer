@@ -60,7 +60,7 @@ WINDOW_HEIGHT = 1080
 ASPECT_RATIO = 16.0 / 9.0
 SCALE_FACTOR = 1
 
-STATIC_RENDER = False
+STATIC_RENDER = True
 STATIC_RENDER_ANIMATION = False
 
 DYNAMIC_RENDER_FRAMERATE = 60
@@ -303,7 +303,6 @@ def main_loop():
         texture = ctx1.texture((w, h), 3)
         texture.use(location=1)
         prog1["previousFrame"] = 1
-        render_data = b"\x00" * w * h * 3
 
         # initialise the uniforms
         prog1["screenWidth"].write(struct.pack("i", w))
@@ -591,8 +590,6 @@ def main_loop():
                 clock.tick(DYNAMIC_RENDER_FRAMERATE)
 
                 pass
-
-            ctx1
 
             # extract the image
             render_data2 = ctx1.screen.read(components=3, dtype="f2")

@@ -37,6 +37,8 @@ uniform int selectedMeshId;
 uniform float depthOfFieldStrength;
 uniform float antialiasStrength;
 
+// uniform bool oneSidedTris;
+
 float inf = 1.0 / 0.0;
 float pi = 3.14159265359;
 
@@ -128,7 +130,7 @@ struct HitInfo
 HitInfo defaultHitInfo() {
     HitInfo hitInfo;
     hitInfo.didHit = false;
-    hitInfo.dst = inf;
+    hitInfo.dst = 1e20;
     hitInfo.hitPoint = vec3(0.0);
     hitInfo.normal = vec3(0.0);
     hitInfo.material = Material(
@@ -195,14 +197,23 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
 
     float kEpsilon = 1e-6;
     float NDotRayDirection = dot(N, dir);
+
+    // check parallel
     if (abs(NDotRayDirection) < kEpsilon)
     {
         hitInfo.didHit = false;
         return hitInfo;
     }
 
-    float d = -dot(N, v0);
+    // if this dot product is positive, the ray is entering through the back
+    if (NDotRayDirection > 0.0)
+    {
+        hitInfo.didHit = false;
+        return hitInfo;
+    }
 
+    // solve plane equation and ignore triangles behind the orig
+    float d = -dot(N, v0);
     float t = -(dot(N, orig) + d) / NDotRayDirection;
 
     if (t < 0.0)
@@ -311,7 +322,7 @@ HitInfo calculateRayCollision(Ray ray)
             sphere.radius
         );
 
-        if (hitInfo.didHit && hitInfo.dst < closestHit.dst)
+        if ((hitInfo.didHit) && (hitInfo.dst < closestHit.dst))
         {
             closestHit = hitInfo;
             closestHit.material = sphere.material;
@@ -352,7 +363,7 @@ HitInfo calculateRayCollision(Ray ray)
             tri
         );
 
-        if (hitInfo.didHit && hitInfo.dst < closestHit.dst)
+        if ((hitInfo.didHit) && (hitInfo.dst < closestHit.dst))
         {
             closestHit = hitInfo;
             
@@ -402,20 +413,11 @@ vec3 randomDirectionHemisphere(vec3 normal, inout uint rngState)
 }
 
 
-
-// I am reading somethign wile about needing to flip the camera if triangles are modelled in a CW arrangement
-// because this reverses the normals. Not sure how ti changes the position of the triangle...
-
-// https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution.html
-
-
 vec3 traceRay(Ray ray, inout uint rngState)
 {
 
     vec3 incomingLight = vec3(0.0, 0.0, 0.0);
     vec3 rayColor = vec3(1.0,1.0,1.0);
-
-
 
     for (int i = 0; i <= MAX_BOUNCES; i++)
     {
@@ -428,6 +430,7 @@ vec3 traceRay(Ray ray, inout uint rngState)
             Material material = hitInfo.material;
 
             vec3 diffuseDir = normalize(hitInfo.normal + randomDirection(rngState));
+            // vec3 diffuseDir = randomDirectionHemisphere(hitInfo.normal, rngState);
             vec3 specularDir = reflect(ray.dir, hitInfo.normal);
 
             ray.dir = mix(diffuseDir, specularDir, material.smoothness);
@@ -490,13 +493,13 @@ void main()
 
     totalIncomingLight /= RAYS_PER_PIXEL;
 
-    Triangle triangle = getTriangle(0);
-    HitInfo hit = rayTriangle(ray, triangle);
+    HitInfo hit0 = rayTriangle(ray, getTriangle(0));
+    HitInfo hit1 = rayTriangle(ray, getTriangle(1));
 
 
     if (STATIC_RENDER)
     {
-        float weight = 1.0 / (float(frameNumber) + 2);
+        float weight = 1.0 / (float(frameNumber) + 1);
         color = 
         texture(previousFrame, (fragPosition.xy + 1.0) / 2) * (1-weight)
         + vec4(totalIncomingLight, 1.0) * weight
@@ -504,7 +507,7 @@ void main()
     }
     else 
     {
-        color = vec4(totalIncomingLight, 1.0)
+        color = vec4(totalIncomingLight, 1.0) * 0.5
         ;
     }
 
