@@ -36,6 +36,8 @@ class Material(ByteableObject):
         emissionColor: Vector3 = Vector3((0.0, 0.0, 0.0)),
         emissionStrength: float = 0.0,
         smoothness: float = 0.0,
+        transmission: float = 0.0,
+        ior: float = 1.0,
     ) -> None:
 
         self.color = color
@@ -43,14 +45,23 @@ class Material(ByteableObject):
         self.emissionStrength = emissionStrength
         self.smoothness = smoothness
 
+        self.transmission = transmission
+        self.ior = ior
+
     def tobytes(self):
         return struct.pack(
-            "4f 3f f f12x",
+            "4f 3f f f f f4x",
             *self.color,
             *self.emissionColor,
             self.emissionStrength,
             self.smoothness,
+            self.transmission,
+            self.ior,
         )
+
+    @property
+    def opacity(self):
+        return self.color.w
 
 
 class Sphere(ByteableObject):
@@ -166,29 +177,18 @@ class Triangle(ByteableObject):
     def update_pos_with_mesh2(self) -> Triangle:
         """Moves the position of the triangle to match that of the mesh"""
         if self.parent is None:
-            print("Nothing to update")
+            print("Nothing to update. Triangle has no mesh parent.")
             return self
 
-        # vec = self.parent.csys.pos
-        # self.posA = self.posA0 + vec
-        # self.posB = self.posB0 + vec
-        # self.posC = self.posC0 + vec
+        trans = self.parent.csys.transformation_matrix
+        rot = self.parent.csys.rotation_matrix
 
-        self.posA = Vector3(
-            pyrr.matrix44.apply_to_vector(
-                self.parent.csys.transformation_matrix, self.posA0
-            )
-        )
-        self.posB = Vector3(
-            pyrr.matrix44.apply_to_vector(
-                self.parent.csys.transformation_matrix, self.posB0
-            )
-        )
-        self.posC = Vector3(
-            pyrr.matrix44.apply_to_vector(
-                self.parent.csys.transformation_matrix, self.posC0
-            )
-        )
+        self.posA = Vector3(pyrr.matrix44.apply_to_vector(trans, self.posA0))
+        self.posB = Vector3(pyrr.matrix44.apply_to_vector(trans, self.posB0))
+        self.posC = Vector3(pyrr.matrix44.apply_to_vector(trans, self.posC0))
+        self.normalA = Vector3(pyrr.matrix33.apply_to_vector(rot, self.normalA0))
+        self.normalB = Vector3(pyrr.matrix33.apply_to_vector(rot, self.normalB0))
+        self.normalC = Vector3(pyrr.matrix33.apply_to_vector(rot, self.normalC0))
 
         return self
 

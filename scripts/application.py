@@ -83,7 +83,10 @@ class Application:
         self.clock = pygame.time.Clock()
         # self.display_scene = basic_scene.scene
         # self.display_scene = basic_scene.scene2
-        self.display_scene = basic_scene.scene3
+        # self.display_scene = basic_scene.scene3
+        self.display_scene = basic_scene.scene4
+
+        self.display_scene.cam.fov = 45
 
         self.register_program(
             # DefaultShaderProgram(
@@ -366,8 +369,6 @@ class DefaultShaderProgram(ProgramABC):
         program["CamLocalToWorldMatrix"].write(cam.local_to_world_matrix.astype("f4"))
         program["CamGlobalPos"].write(cam.csys.pos.astype("f4"))
 
-        # time = pygame.time.get_ticks() / np.float32(1000.0)
-
         # cam.csys.pos.x = 0 + 2.0 * sin(time)
 
         # CAM_DEPTH_OF_FIELD_STRENGTH = 0.000
@@ -470,20 +471,20 @@ class RayTracerDynamic(ProgramABC):
 
         program["meshCount"].write(struct.pack("i", len(scene.meshes)))
 
-        triangles_ssbo = context.buffer(
+        self.triangles_ssbo = context.buffer(
             functions.iter_to_bytes(
                 [t.update_pos_with_mesh2() for t in scene.triangles],
             )
         )
         triangles_ssbo_binding = 9
-        triangles_ssbo.bind_to_storage_buffer(binding=triangles_ssbo_binding)
+        self.triangles_ssbo.bind_to_storage_buffer(binding=triangles_ssbo_binding)
+
         mesh_buffer = context.buffer(functions.iter_to_bytes(scene.meshes))
         mesh_buffer_binding = 10
         program["meshBuffer"].binding = mesh_buffer_binding
         mesh_buffer.bind_to_uniform_block(mesh_buffer_binding)
 
         sky_color = Vector3((131, 200, 228), dtype="f4") / 255
-
         program["skyColor"].write(struct.pack("3f", *sky_color))
 
     def calculate_frame(self, scene: Scene):
@@ -494,6 +495,17 @@ class RayTracerDynamic(ProgramABC):
         cam = scene.cam
 
         spheres = scene.spheres
+
+        # self.is_scene_static = False
+        # time = pygame.time.get_ticks() / np.float32(1000.0)
+        # scene.meshes[0].csys.pos.z = 0.0 + 5.0 * sin(time / 2)
+        # scene.spheres[-2].pos.x = 2 + 1.0 * sin(time)
+
+        self.triangles_ssbo.write(
+            functions.iter_to_bytes(
+                [t.update_pos_with_mesh2() for t in scene.triangles],
+            )
+        )
 
         program["frameNumber"].write(struct.pack("I", self.cycle_counter))
         CAM_DEPTH_OF_FIELD_STRENGTH = 0.000
@@ -523,16 +535,17 @@ class RayTracerDynamic(ProgramABC):
         self.texture.write(render_data)
 
         if self.is_scene_static:
-            self.shader_rng_counter += 1
             self.cycle_counter += 1
         else:
             self.is_scene_static = True
-            self.shader_rng_counter = 0
+            # self.shader_rng_counter = 0
             self.cycle_counter = 0
+
+        self.shader_rng_counter += 1
 
         self.context.gc()
 
-        print(self.shader_rng_counter)
+        # print(self.shader_rng_counter)
 
     def handle_interactions(
         self,

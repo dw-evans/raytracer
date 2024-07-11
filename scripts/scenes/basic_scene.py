@@ -79,19 +79,19 @@ spheres = [
         material=material_plain_1,
     ),
     Sphere(
-        pos=Vector3((2, 3, 4), dtype="f4"),
-        radius=1,
-        material=material_light_source_1,
+        pos=Vector3((3, 3, 1), dtype="f4"),
+        radius=0.5,
+        material=material_plain_4,
     ),
     Sphere(
         pos=Vector3((-2, 3, 4), dtype="f4"),
         radius=1,
-        material=material_light_source_1,
+        material=material_plain_4,
     ),
     Sphere(
-        pos=Vector3((1, 0.5, 0), dtype="f4"),
+        pos=Vector3((2, 0.5, 0), dtype="f4"),
         radius=0.5,
-        material=material_light_source_2,
+        material=material_light_source_1,
     ),
     Sphere(
         pos=Vector3((0, 0, 0), dtype="f4"),
@@ -119,7 +119,7 @@ msh1 = Mesh.from_stl(
 scene.meshes.append(msh1)
 
 msh1.csys.tp(Vector3((-1.5, 1.0, 9.0)))
-msh1.csys.rzg(100)
+# msh1.csys.rzg(100)
 
 msh2 = Mesh.from_stl(
     stl_file,
@@ -127,7 +127,7 @@ msh2 = Mesh.from_stl(
 )
 scene.meshes.append(msh2)
 msh2.csys.tp(Vector3((2, 0.0, 8.0)))
-msh2.csys.rzg(90)
+# msh2.csys.rzg(90)
 
 
 # scene2 = Scene()
@@ -176,3 +176,29 @@ cube_mesh.csys.ryg(250)
 scene3.meshes.append(cube_mesh)
 
 scene3.spheres = spheres
+
+
+scene4 = Scene()
+
+
+scene4.spheres = spheres
+
+stl_file = Path() / "objects/warped_cube.stl"
+
+glass_material = Material(
+    color=Vector4((0.9, 1.0, 1.0, 1.0)),
+    smoothness=1.0,
+    transmission=1.0,
+    ior=1.2,
+)
+
+msh1 = Mesh.from_stl(
+    stl_file,
+    material=glass_material,
+)
+scene4.meshes.append(msh1)
+
+msh1.csys.tp(Vector3((0, 0.0, 6.0)))
+msh1.csys.rzg(270)
+
+msh1.csys.rxg(90)

@@ -166,7 +166,6 @@ vec3 getEnvironmentLight(Ray ray)
 {
     return skyColor;
 }
-
 HitInfo rayTriangle(Ray ray, Triangle tri)
 {
     HitInfo hitInfo = defaultHitInfo();
@@ -185,14 +184,23 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
 
     float kEpsilon = 1e-6;
     float NDotRayDirection = dot(N, dir);
+
+    // check parallel
     if (abs(NDotRayDirection) < kEpsilon)
     {
         hitInfo.didHit = false;
         return hitInfo;
     }
 
-    float d = -dot(N, v0);
+    // if this dot product is positive, the ray is entering through the back
+    if (NDotRayDirection > 0.0)
+    {
+        hitInfo.didHit = false;
+        return hitInfo;
+    }
 
+    // solve plane equation and ignore triangles behind the orig
+    float d = -dot(N, v0);
     float t = -(dot(N, orig) + d) / NDotRayDirection;
 
     if (t < 0.0)
@@ -205,9 +213,12 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
 
     vec3 C;
 
+    float area = length(N) / 2.0;
+
     vec3 edge0 = v1 - v0;
     vec3 vp0 = P - v0;
     C = cross(edge0, vp0);
+    float w = length(C) / 2.0 / area;
     if (dot(N, C) < 0.0)
     {
         hitInfo.didHit = false;
@@ -217,6 +228,7 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
     vec3 edge1 = v2 - v1;
     vec3 vp1 = P - v1;
     C = cross(edge1, vp1);
+    float u = length(C) / 2.0 / area;
     if (dot(N, C) < 0.0)
     {
         hitInfo.didHit = false;
@@ -226,6 +238,7 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
     vec3 edge2 = v0 - v2;
     vec3 vp2 = P - v2;
     C = cross(edge2, vp2);
+    float v = 1 - u - w;
     if (dot(N, C) < 0.0)
     {
         hitInfo.didHit = false;
@@ -233,7 +246,8 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
     }
 
     // hitInfo.normal = tri.normalA;
-    hitInfo.normal = N / float(length(N));
+    // hitInfo.normal = N / float(length(N));
+    hitInfo.normal = tri.normalA * u + tri.normalB * v + tri.normalC * w;
     hitInfo.didHit = true;
     // hitInfo.material = tri.material;
     hitInfo.dst = t;
@@ -241,7 +255,6 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
     return hitInfo;
 
 }
-
 
 void swap(inout float a, inout float b) {
     float temp = a;

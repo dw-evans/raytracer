@@ -47,7 +47,9 @@ struct Material
     vec4 color; // 16 
     vec3 emissionColor; // 12
     float emissionStrength; // 4
-    float smoothness; // 4 + 12
+    float smoothness; // 4
+    float transmission; // 4
+    float ior; // 4 + 4x
 };
 
 // uniform Material highlightMaterial;#
@@ -114,6 +116,8 @@ struct Ray
 {
     vec3 origin;
     vec3 dir;
+    float ior;
+    bool inSolid;
 };
 
 struct HitInfo 
@@ -136,6 +140,8 @@ HitInfo defaultHitInfo() {
     hitInfo.material = Material(
         vec4(0.0),
         vec3(0.0),
+        0.0,
+        0.0,
         0.0,
         0.0
     );
@@ -259,11 +265,12 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
     }
 
     // hitInfo.normal = tri.normalA;
-    // hitInfo.normal = N / float(length(N));
-    hitInfo.normal = tri.normalA * u + tri.normalB * v + tri.normalC * w;
+    hitInfo.normal = N / float(length(N));
+    // hitInfo.normal = tri.normalA * u + tri.normalB * v + tri.normalC * w;
     hitInfo.didHit = true;
     // hitInfo.material = tri.material;
     hitInfo.dst = t;
+    hitInfo.hitPoint = t * ray.dir + ray.origin;
 
     return hitInfo;
 
@@ -419,6 +426,33 @@ vec3 randomDirectionHemisphere(vec3 normal, inout uint rngState)
 }
 
 
+float schlickApproximation(float n1, float n2, float theta)
+{
+    // function that calculates the reflection coefficient
+    // i.e. how much goes to reflection, and the rest going to refraction
+    float R0 = pow((n1 - n2) / (n1 + n2), 2);
+    return R0 + (1 - R0) * pow(1 - cos(theta), 5);
+}
+
+float angleRefraction(float n1, float n2, float thetai)
+{
+    return asin(n1 / n2 * sin(thetai));
+}
+
+float angleBetweenVectors(vec3 v1, vec3 v2) {
+    vec3 norm_v1 = normalize(v1);
+    vec3 norm_v2 = normalize(v2);
+
+    float dot_product = dot(norm_v1, norm_v2);
+
+    // clamp for fear of floating point errors
+    dot_product = clamp(dot_product, -1.0, 1.0);
+
+    float angle = acos(dot_product);
+    return angle;
+}
+
+
 vec3 traceRay(Ray ray, inout uint rngState)
 {
 
@@ -430,21 +464,86 @@ vec3 traceRay(Ray ray, inout uint rngState)
         HitInfo hitInfo = calculateRayCollision(ray);
         if (hitInfo.didHit)
         {
+            // move the ray origin to its hit point
             ray.origin = hitInfo.hitPoint;
 
             // Material material = hitInfo.material;
             Material material = hitInfo.material;
 
             vec3 diffuseDir = normalize(hitInfo.normal + randomDirection(rngState));
-            // vec3 diffuseDir = randomDirectionHemisphere(hitInfo.normal, rngState);
             vec3 specularDir = reflect(ray.dir, hitInfo.normal);
 
-            ray.dir = mix(diffuseDir, specularDir, material.smoothness);
+            vec3 emittedLight;
 
-            vec3 emittedLight = material.emissionColor * material.emissionStrength;
+            // do some reflection/refraction maths if the transmission is above zero.
+            if (material.transmission > 0.001)
+            {
+                float n1;
+                float n2;
+                float eta;
+                // if the ray is in the solid, set the n1/n2 and inSolid flag.
+                if (ray.inSolid)
+                {
+                    n1 = ray.ior;
+                    n2 = 1.0;
+                    ray.ior = n2;
+                    ray.inSolid = false;
+                } else 
+                {
+                    n1 = 1.0;
+                    n2 = material.ior;
+                    ray.ior = n2;
+                    ray.inSolid = true;
+                }
 
-            incomingLight += emittedLight * rayColor;
-            rayColor *= material.color.xyz;
+                eta = n1 / n2;
+                vec3 transmissionDir = refract(ray.dir, hitInfo.normal, eta);
+
+                float theta = angleBetweenVectors(-hitInfo.normal, transmissionDir);
+                float shlickRatio = schlickApproximation(n1, n2, theta);
+                
+                // if the random variable is above the reflect threshold, send the ray to refract
+                if (randomValue(rngState) > shlickRatio)
+                {
+                    // mix the opposite of the diffuse and transmission based on smoothness
+                    ray.dir = ray.dir = mix(-diffuseDir, transmissionDir, material.smoothness);
+
+                    // if the ray is in a solid, we need to calculate the transmission
+                    // colour, which will be increasingly close to the material colour
+                    // based on the distance
+                    // perhaps use an exponential function
+                    // TODO, lets ignore this for now.
+
+                    emittedLight = material.emissionColor * material.emissionStrength;
+                    incomingLight += emittedLight * rayColor;
+                    rayColor *= material.color.xyz;
+
+                } else
+                // This one therefore reflects (I'm sure this could be optimised...)
+                {
+                    ray.dir = mix(diffuseDir, specularDir, material.smoothness);        
+                    emittedLight = material.emissionColor * material.emissionStrength;
+                    incomingLight += emittedLight * rayColor;
+                    rayColor *= material.color.xyz;
+                }
+
+                // ray.dir = mix(diffuseDir, specularDir, material.smoothness);
+                
+            } else
+            // if there is no transmission, we use the old function
+            {
+                ray.dir = mix(diffuseDir, specularDir, material.smoothness);
+                emittedLight = material.emissionColor * material.emissionStrength;
+                incomingLight += emittedLight * rayColor;
+                rayColor *= material.color.xyz;
+            }
+
+
+            // ray.dir = mix(diffuseDir, specularDir, material.smoothness);
+
+            // emittedLight = material.emissionColor * material.emissionStrength;
+            // incomingLight += emittedLight * rayColor;
+            // rayColor *= material.color.xyz;
 
         } else 
         {
@@ -482,7 +581,6 @@ void main()
     {
         float planeWidth = ViewParams.x;
         Ray newRay;
-
         vec3 depthOfFieldOffset = (vec3(randomValue(rngState), randomValue(rngState), 0.0) * 2.0 - 1.0) * depthOfFieldStrength * camNearPlane;
         vec3 antialiasOffset = (vec3(randomValue(rngState), randomValue(rngState), 0.0) * 2.0 - 1.0) * antialiasStrength;
 
@@ -513,7 +611,7 @@ void main()
     }
     else 
     {
-        color = vec4(totalIncomingLight, 1.0) * 0.5
+        color = vec4(normalize(totalIncomingLight), 1.0)
         ;
     }
 
