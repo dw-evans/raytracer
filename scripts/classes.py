@@ -59,6 +59,15 @@ class Material(ByteableObject):
             self.ior,
         )
 
+    # def tobytes(self):
+    #     return struct.pack(
+    #         "4f 3f f f12x",
+    #         *self.color,
+    #         *self.emissionColor,
+    #         self.emissionStrength,
+    #         self.smoothness,
+    #     )
+
     @property
     def opacity(self):
         return self.color.w
@@ -75,6 +84,8 @@ class Sphere(ByteableObject):
 
 
 class Triangle(ByteableObject):
+    TRIANGLE_ID = 0
+
     def __init__(
         self,
         posA: Vector3,
@@ -108,6 +119,10 @@ class Triangle(ByteableObject):
         self.parent = parent
 
         self.__post_init__()
+
+        self.triangle_id = Triangle.TRIANGLE_ID
+
+        Triangle.TRIANGLE_ID += 1
 
         pass
 
@@ -150,7 +165,7 @@ class Triangle(ByteableObject):
     def tobytes(self) -> bytes | bytearray:
         return (
             struct.pack(
-                "3f4x 3f4x 3f4x 3f4x 3f4x 3f i",
+                "3f4x 3f4x 3f4x 3f4x 3f4x 3f i i12x",
                 *self.posA.astype("f4"),
                 *self.posB.astype("f4"),
                 *self.posC.astype("f4"),
@@ -158,6 +173,7 @@ class Triangle(ByteableObject):
                 *self.normalB.astype("f4"),
                 *self.normalC.astype("f4"),
                 self.parent.mesh_index,
+                self.triangle_id,
             )
             + self.material.tobytes()
         )

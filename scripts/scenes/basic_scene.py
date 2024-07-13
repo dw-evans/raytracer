@@ -198,7 +198,13 @@ msh1 = Mesh.from_stl(
 )
 scene4.meshes.append(msh1)
 
-msh1.csys.tp(Vector3((0, 0.0, 6.0)))
+msh1.csys.tp(Vector3((0, 0.5, 6.0)))
 msh1.csys.rzg(270)
 
 msh1.csys.rxg(90)
+
+atmosphere_material = Material(
+    Vector4((1.0, 1.0, 1.0, 1.0), dtype="f4"),
+    transmission=1.0,
+    ior=1.0,
+)

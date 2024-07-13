@@ -452,6 +452,7 @@ class RayTracerDynamic(ProgramABC):
         program["STATIC_RENDER"].write(struct.pack("i", True))
         program["MAX_BOUNCES"].write(struct.pack("i", self.MAX_RAY_BOUNCES))
         program["RAYS_PER_PIXEL"].write(struct.pack("i", self.RAYS_PER_PIXEL))
+        program["RAYS_PER_PIXEL"].write(struct.pack("i", 1))
 
         texture = context.texture((self.width, self.height), 3)
         texture.use(location=1)
@@ -484,8 +485,15 @@ class RayTracerDynamic(ProgramABC):
         program["meshBuffer"].binding = mesh_buffer_binding
         mesh_buffer.bind_to_uniform_block(mesh_buffer_binding)
 
-        sky_color = Vector3((131, 200, 228), dtype="f4") / 255
-        program["skyColor"].write(struct.pack("3f", *sky_color))
+        # sky_color = Vector3((131, 200, 228), dtype="f4") / 255
+        # program["skyColor"].write(struct.pack("3f", *sky_color))
+
+        material_buffer = context.buffer(basic_scene.atmosphere_material.tobytes())
+        material_buffer_binding = 11
+        program["materialBuffer"].binding = material_buffer_binding
+        material_buffer.bind_to_uniform_block(material_buffer_binding)
+
+        program
 
     def calculate_frame(self, scene: Scene):
 
@@ -495,6 +503,9 @@ class RayTracerDynamic(ProgramABC):
         cam = scene.cam
 
         spheres = scene.spheres
+
+        self.program["MAX_BOUNCES"].write(struct.pack("i", self.MAX_RAY_BOUNCES))
+        print(self.MAX_RAY_BOUNCES)
 
         # self.is_scene_static = False
         # time = pygame.time.get_ticks() / np.float32(1000.0)
@@ -521,8 +532,6 @@ class RayTracerDynamic(ProgramABC):
         program["CamLocalToWorldMatrix"].write(cam.local_to_world_matrix.astype("f4"))
         program["CamGlobalPos"].write(cam.csys.pos.astype("f4"))
 
-        # time = pygame.time.get_ticks() / np.float32(1000.0)
-
         sphere_bytes = functions.iter_to_bytes(spheres)
         sphere_buffer = context.buffer(sphere_bytes)
         sphere_buffer.bind_to_uniform_block(self.sphere_buffer_binding)
@@ -538,14 +547,11 @@ class RayTracerDynamic(ProgramABC):
             self.cycle_counter += 1
         else:
             self.is_scene_static = True
-            # self.shader_rng_counter = 0
             self.cycle_counter = 0
 
         self.shader_rng_counter += 1
 
         self.context.gc()
-
-        # print(self.shader_rng_counter)
 
     def handle_interactions(
         self,
@@ -599,6 +605,23 @@ class RayTracerDynamic(ProgramABC):
                 if key_state[pygame.K_LCTRL]:
                     cam.csys.tyg(-1 * cam_linear_speed_adjusted)
                     self.is_scene_static = False
+
+                if key_state[pygame.K_1]:
+                    self.MAX_RAY_BOUNCES = 1
+                if key_state[pygame.K_2]:
+                    self.MAX_RAY_BOUNCES = 2
+                if key_state[pygame.K_3]:
+                    self.MAX_RAY_BOUNCES = 3
+                if key_state[pygame.K_4]:
+                    self.MAX_RAY_BOUNCES = 4
+                if key_state[pygame.K_5]:
+                    self.MAX_RAY_BOUNCES = 5
+                if key_state[pygame.K_6]:
+                    self.MAX_RAY_BOUNCES = 6
+                if key_state[pygame.K_7]:
+                    self.MAX_RAY_BOUNCES = 7
+                if key_state[pygame.K_8]:
+                    self.MAX_RAY_BOUNCES = 8
 
             if mouse_enabled:
                 mouse_x, mouse_y = pygame.mouse.get_pos()

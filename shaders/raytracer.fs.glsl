@@ -29,7 +29,7 @@ uniform uint frameNumber;
 
 uniform bool STATIC_RENDER;
 
-uniform vec3 skyColor;
+// uniform vec3 skyColor;
 uniform vec3 groundColor;
 
 uniform int selectedMeshId;
@@ -54,10 +54,22 @@ struct Material
 
 // uniform Material highlightMaterial;#
 
+
+
+// layout(std140) uniform materialBuffer
+// {
+//     Material highlightMaterials[4];
+// };
+
+
+
 layout(std140) uniform materialBuffer
 {
-    Material highlightMaterials[4];
+    Material atmosphereMaterial;
 };
+
+vec3 skyColor = atmosphereMaterial.color.xyz;
+
 
 struct Sphere
 {
@@ -81,6 +93,7 @@ struct Triangle
     vec3 normalB; // 12 + 4
     vec3 normalC; // 12 + 4
     int meshIndex; // 4 + 12
+    int triId;
     Material material; // ...
 };
 
@@ -112,13 +125,6 @@ layout(std140) uniform meshBuffer
 };
 
 
-struct Ray 
-{
-    vec3 origin;
-    vec3 dir;
-    float ior;
-    bool inSolid;
-};
 
 struct HitInfo 
 {
@@ -128,6 +134,18 @@ struct HitInfo
     vec3 normal;
     Material material;
     int meshIndex;
+    int facetId;
+    bool hitBackside;
+};
+
+struct Ray 
+{
+    vec3 origin;
+    vec3 dir;
+    HitInfo prevHit;
+    // float ior;
+    // bool inSolid;
+
 };
 
 
@@ -145,6 +163,8 @@ HitInfo defaultHitInfo() {
         0.0,
         0.0
     );
+    hitInfo.facetId = -1;
+    hitInfo.hitBackside = false;
     return hitInfo;
 }
 
@@ -212,10 +232,16 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
     }
 
     // if this dot product is positive, the ray is entering through the back
+    // if (NDotRayDirection > 0.0)
+    // {
+    //     hitInfo.didHit = false;
+    //     return hitInfo;
+    // }
+
+    // set the flag if it hits the back of a facet
     if (NDotRayDirection > 0.0)
     {
-        hitInfo.didHit = false;
-        return hitInfo;
+        hitInfo.hitBackside = true;
     }
 
     // solve plane equation and ignore triangles behind the orig
@@ -271,6 +297,8 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
     // hitInfo.material = tri.material;
     hitInfo.dst = t;
     hitInfo.hitPoint = t * ray.dir + ray.origin;
+
+    hitInfo.facetId = tri.triId;
 
     return hitInfo;
 
@@ -360,6 +388,13 @@ HitInfo calculateRayCollision(Ray ray)
 
         // int triMeshIndex = tri.meshIndex;
 
+        // the ray cannot reflect off the same one it reflected off!
+        if (tri.triId == ray.prevHit.facetId)
+        {
+            continue;
+        }
+
+
         for (int j = 0; j < meshCount; j++)
         {
             // if the ray isn't intersecting the bounding box of the triangle's mesh
@@ -379,16 +414,16 @@ HitInfo calculateRayCollision(Ray ray)
         if ((hitInfo.didHit) && (hitInfo.dst < closestHit.dst))
         {
             closestHit = hitInfo;
+            closestHit.material = tri.material;
             
-            if (tri.meshIndex == selectedMeshId)
-            {
-                closestHit.material = highlightMaterials[0];
-            }
-            else
-            {
-                closestHit.material = tri.material;
-            }
-            
+            // if (tri.meshIndex == selectedMeshId)
+            // {
+            //     closestHit.material = highlightMaterials[0];
+            // }
+            // else
+            // {
+            //     closestHit.material = tri.material;
+            // }
         }
     }
 
@@ -455,105 +490,117 @@ float angleBetweenVectors(vec3 v1, vec3 v2) {
 
 vec3 traceRay(Ray ray, inout uint rngState)
 {
-
     vec3 incomingLight = vec3(0.0, 0.0, 0.0);
     vec3 rayColor = vec3(1.0,1.0,1.0);
+
+    vec3 diffuseDir;
+    vec3 specularDir;
+    vec3 emittedLight;
+    Material material;
 
     for (int i = 0; i <= MAX_BOUNCES; i++)
     {
         HitInfo hitInfo = calculateRayCollision(ray);
         if (hitInfo.didHit)
         {
-            // move the ray origin to its hit point
-            ray.origin = hitInfo.hitPoint;
+            // vec3 diffuseDir = normalize(hitInfo.normal + randomDirection(rngState));
+            // vec3 specularDir = reflect(ray.dir, hitInfo.normal);
 
-            // Material material = hitInfo.material;
-            Material material = hitInfo.material;
+            material = hitInfo.material;
 
-            vec3 diffuseDir = normalize(hitInfo.normal + randomDirection(rngState));
-            vec3 specularDir = reflect(ray.dir, hitInfo.normal);
+            emittedLight = material.emissionColor * material.emissionStrength;
+            incomingLight += emittedLight * rayColor;
 
-            vec3 emittedLight;
+            // -1 if hits back side
+            // +1 if hits front side
+            int normalFlip = -1 * (int(hitInfo.hitBackside) * 2 - 1);
 
-            // do some reflection/refraction maths if the transmission is above zero.
             if (material.transmission > 0.001)
             {
-                float n1;
-                float n2;
-                float eta;
-                // if the ray is in the solid, set the n1/n2 and inSolid flag.
-                if (ray.inSolid)
+                float n1 = ray.prevHit.material.ior;
+                float n2 = material.ior;
+                float eta = n1 / n2;
+
+                // specularDir = refract(ray.dir, normalFlip * hitInfo.normal, eta);
+                // diffuseDir = normalize(normalFlip * hitInfo.normal + randomDirection(rngState));
+                // // if it hits the back side, refract is entering the atmosphere materia
+                // // if it hits the front side, it picks up the material colour
+                // if (hitInfo.hitBackside)
+                // {
+                //     // exiting the material
+                //     rayColor *= vec3(1.0);
+                // } else
+                // {
+                //     // entering the material
+                //     rayColor *= material.color.xyz;
+                // }
+
+                // technically there is a -1 * -1, I think? 
+                specularDir = refract(ray.dir, normalFlip * hitInfo.normal, eta);
+                // specularDir = refract(ray.dir, -1 * hitInfo.normal, eta);
+
+                if (specularDir == vec3(0.0))
                 {
-                    n1 = ray.ior;
-                    n2 = 1.0;
-                    ray.ior = n2;
-                    ray.inSolid = false;
-                } else 
-                {
-                    n1 = 1.0;
-                    n2 = material.ior;
-                    ray.ior = n2;
-                    ray.inSolid = true;
+                    // change to reflect
+                    // it reflects and picks up the material color
+                    specularDir = reflect(ray.dir, hitInfo.normal);
+                    diffuseDir = normalize(normalFlip * hitInfo.normal + randomDirection(rngState));
+                    rayColor *= material.color.xyz;
+                    
+                } else {
+                    float theta = angleBetweenVectors(-1 * normalFlip * hitInfo.normal, specularDir);
+                    // I think this is correct?
+                    float shlickRatio = schlickApproximation(n1, n2, theta);
+                    
+                    // if greater than the shlickRatio, it refracts successfully
+                    if (randomValue(rngState) > shlickRatio)
+                    {
+                        // it refracts successfully
+                        diffuseDir = normalize(-1 * normalFlip * hitInfo.normal + randomDirection(rngState));
+                        // if it hits the back side, refract is entering the atmosphere materia
+                        // if it hits the front side, it picks up the material colour
+                        if (hitInfo.hitBackside)
+                        {
+                            // exiting the material
+                            rayColor *= vec3(1.0);
+                        } else
+                        {
+                            // entering the material
+                            rayColor *= material.color.xyz;
+                        }
+
+                    } else
+                    {
+                        // it reflects and picks up the material color
+                        specularDir = reflect(ray.dir, hitInfo.normal);
+                        diffuseDir = normalize(normalFlip * hitInfo.normal + randomDirection(rngState));
+                        rayColor *= material.color.xyz;
+                    }
                 }
 
-                eta = n1 / n2;
-                vec3 transmissionDir = refract(ray.dir, hitInfo.normal, eta);
-
-                float theta = angleBetweenVectors(-hitInfo.normal, transmissionDir);
-                float shlickRatio = schlickApproximation(n1, n2, theta);
-                
-                // if the random variable is above the reflect threshold, send the ray to refract
-                if (randomValue(rngState) > shlickRatio)
-                {
-                    // mix the opposite of the diffuse and transmission based on smoothness
-                    ray.dir = ray.dir = mix(-diffuseDir, transmissionDir, material.smoothness);
-
-                    // if the ray is in a solid, we need to calculate the transmission
-                    // colour, which will be increasingly close to the material colour
-                    // based on the distance
-                    // perhaps use an exponential function
-                    // TODO, lets ignore this for now.
-
-                    emittedLight = material.emissionColor * material.emissionStrength;
-                    incomingLight += emittedLight * rayColor;
-                    rayColor *= material.color.xyz;
-
-                } else
-                // This one therefore reflects (I'm sure this could be optimised...)
-                {
-                    ray.dir = mix(diffuseDir, specularDir, material.smoothness);        
-                    emittedLight = material.emissionColor * material.emissionStrength;
-                    incomingLight += emittedLight * rayColor;
-                    rayColor *= material.color.xyz;
-                }
-
-                // ray.dir = mix(diffuseDir, specularDir, material.smoothness);
-                
             } else
-            // if there is no transmission, we use the old function
             {
-                ray.dir = mix(diffuseDir, specularDir, material.smoothness);
-                emittedLight = material.emissionColor * material.emissionStrength;
-                incomingLight += emittedLight * rayColor;
+                // standard reflection off the material
+                specularDir = reflect(ray.dir, hitInfo.normal);
+                diffuseDir = normalize(normalFlip * hitInfo.normal + randomDirection(rngState));
                 rayColor *= material.color.xyz;
             }
 
-
-            // ray.dir = mix(diffuseDir, specularDir, material.smoothness);
-
-            // emittedLight = material.emissionColor * material.emissionStrength;
-            // incomingLight += emittedLight * rayColor;
-            // rayColor *= material.color.xyz;
+            // move the ray origin to its hit point
+            ray.origin = hitInfo.hitPoint;
+            ray.dir = mix(diffuseDir, specularDir, material.smoothness);
+            ray.prevHit = hitInfo;
 
         } else 
         {
+            // the ray misses all objects, pick up the environment color
             incomingLight += getEnvironmentLight(ray) * rayColor;
             break;
         }
+
     }
-
+    
     return incomingLight;
-
 }
 
 
@@ -574,6 +621,8 @@ void main()
     ray.origin = CamGlobalPos;
     ray.dir = normalize(viewPoint);
 
+
+
     float camNearPlane = ViewParams.z;
 
     vec3 totalIncomingLight = vec3(0.0, 0.0, 0.0);
@@ -590,6 +639,8 @@ void main()
 
         newRay.dir = normalize(viewPoint + depthOfFieldOffset + antialiasOffset);
         newRay.origin = ray.origin.xyz - depthOfFieldOffset;
+        newRay.prevHit = defaultHitInfo();
+        newRay.prevHit.material = atmosphereMaterial;
 
         totalIncomingLight += traceRay(newRay, rngState);
         // totalIncomingLight += traceRay(ray, rngState);
