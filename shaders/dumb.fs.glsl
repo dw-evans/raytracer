@@ -40,6 +40,8 @@ struct Material
     vec3 emissionColor; // 12
     float emissionStrength; // 4
     float smoothness; // 4 + 12
+    float transition;
+    float ior;
 };
 
 layout(std140) uniform materialBuffer
@@ -70,6 +72,7 @@ struct Triangle
     vec3 normalB; // 12 + 4
     vec3 normalC; // 12 + 4
     int meshIndex; // 4 + 12
+    int triId;
     Material material; // ...
 };
 
@@ -115,6 +118,8 @@ struct HitInfo
     vec3 normal;
     Material material;
     int meshIndex;
+    int facetId;
+    bool hitBackside;
 };
 
 
@@ -128,7 +133,9 @@ HitInfo defaultHitInfo() {
         vec4(0.0),
         vec3(0.0),
         0.0,
-        0.0
+        0.0,
+        0.0,
+        1.0
     );
     return hitInfo;
 }

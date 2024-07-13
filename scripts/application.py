@@ -42,6 +42,9 @@ from typing import Generator
 from scripts.scenes import basic_scene
 
 
+from functools import partial
+
+
 class Application:
 
     def __init__(
@@ -89,13 +92,15 @@ class Application:
         self.display_scene.cam.fov = 45
 
         self.register_program(
-            # DefaultShaderProgram(
-            #     app=self,
-            #     file_fragment_shader="shaders/dumb.fs.glsl",
-            #     file_vertex_shader="shaders/dumb.vs.glsl",
-            #     width=self.WINDOW_WIDTH,
-            #     height=self.WINDOW_HEIGHT,
-            # ),
+            DefaultShaderProgram(
+                app=self,
+                file_fragment_shader="shaders/dumb.fs.glsl",
+                file_vertex_shader="shaders/dumb.vs.glsl",
+                width=self.WINDOW_WIDTH,
+                height=self.WINDOW_HEIGHT,
+            ),
+        )
+        self.register_program(
             RayTracerDynamic(
                 app=self,
                 file_fragment_shader="shaders/raytracer.fs.glsl",
@@ -104,6 +109,8 @@ class Application:
                 height=self.WINDOW_HEIGHT,
             ),
         )
+
+        self.is_waiting_to_toggle = False
 
     def start(self):
         self.running = True
@@ -145,24 +152,65 @@ class Application:
         # if there is only one program, set it to the display program
         if len(list(self.programs.keys())) == 1:
             self.display_program = self.programs[list(self.programs.keys())[0]]
+        else:
+            self.display_program = self.programs["default"]
+
+    def toggle_renderer(self):
+        """Function to toggle between the raytracer and the dumb one"""
+        if self.display_program.name == "default":
+            self.display_program = self.programs["raytracer"]
+        elif self.display_program.name == "raytracer":
+            self.display_program = self.programs["default"]
 
     def run(self):
         # configure the program and then run it
         self.display_program.configure_program(self.display_scene)
-        # try:
         while self.running:
-            self.display_program.handle_interactions(
-                self,
-                self.display_scene.cam,
-                self.display_scene,
-                keyboard_enabled=True,
-                mouse_enabled=True,
+
+            options = {
+                "app": self,
+                "cam": self.display_scene.cam,
+                "scene": self.display_scene,
+                "keyboard_enabled": True,
+                "mouse_enabled": True,
+            }
+
+            program_event_handler = partial(
+                self.display_program.handle_event,
+                **options,
             )
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                    pygame.quit()
+                    sys.exit()
+
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_TAB:
+                        if not self.is_waiting_to_toggle:
+                            self.is_waiting_to_toggle = True
+                            self.toggle_renderer()
+                            self.run()
+
+                elif event.type == pygame.KEYUP:
+                    if event.key == pygame.K_TAB:
+                        self.is_waiting_to_toggle = False
+
+                program_event_handler(event)
+
+                # self.display_program.handle_event(
+                #     event=event,
+                #     app=self,
+                #     cam=self.display_scene.cam,
+                #     scene=self.display_scene,
+                #     keyboard_enabled=True,
+                #     mouse_enabled=True,
+                # )
+
             self.display_program.calculate_frame(self.display_scene)
             pygame.display.flip()
             self.clock.tick(self.DYNAMIC_RENDER_FRAMERATE)
-        # except Exception as e:
-        #     print(f"Exception occurred: {e}")
 
 
 def animate_csys(
@@ -286,9 +334,10 @@ class ProgramABC(ABC):
     def calculate_frame(self, scene: Scene) -> None:
         raise NotImplementedError
 
-    def handle_interactions(
+    def handle_event(
         self,
-        screen: pygame.Surface,
+        event,
+        app: Application,
         cam: Camera,
         scene: Scene,
         keyboard_enabled: bool,
@@ -390,21 +439,108 @@ class DefaultShaderProgram(ProgramABC):
 
         context.gc()
 
-    def handle_interactions(
+    def handle_event(
         self,
-        screen: pygame.Surface,
+        event,
+        app: Application,
         cam: Camera,
         scene: Scene,
         keyboard_enabled: bool,
         mouse_enabled: bool,
     ):
-        return generic_camera_event_handler(
-            app=self.app,
-            cam=cam,
-            scene=scene,
-            keyboard_enabled=keyboard_enabled,
-            mouse_enabled=mouse_enabled,
-        )
+        """Basic mouse/keyboard handler function for the application"""
+        # return generic_camera_event_handler(
+        #     app=self.app,
+        #     cam=cam,
+        #     scene=scene,
+        #     keyboard_enabled=keyboard_enabled,
+        #     mouse_enabled=mouse_enabled,
+        # )
+
+        app = self.app
+
+        cam_linear_speed_adjusted = app.cam_linear_speed_adjusted
+        cam_roll_speed_adjusted = app.cam_roll_speed_adjusted
+        cam_scroll_speed_adjusted = app.cam_scroll_speed_adjusted
+        cam_angular_speed_adjusted = app.cam_angular_speed_adjusted
+
+        if keyboard_enabled:
+
+            key_state = pygame.key.get_pressed()
+            if key_state[pygame.K_w]:
+                cam.csys.tzp(1 * cam_linear_speed_adjusted)
+            if key_state[pygame.K_s]:
+                cam.csys.tzp(-1 * cam_linear_speed_adjusted)
+            if key_state[pygame.K_d]:
+                cam.csys.txp(1 * cam_linear_speed_adjusted)
+            if key_state[pygame.K_a]:
+                cam.csys.txp(-1 * cam_linear_speed_adjusted)
+            if key_state[pygame.K_q]:
+                cam.csys.rzp(-1 * cam_roll_speed_adjusted)
+            if key_state[pygame.K_e]:
+                cam.csys.rzp(cam_roll_speed_adjusted)
+            if key_state[pygame.K_SPACE]:
+                cam.csys.tyg(1 * cam_linear_speed_adjusted)
+            if key_state[pygame.K_LCTRL]:
+                cam.csys.tyg(-1 * cam_linear_speed_adjusted)
+
+        if mouse_enabled:
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+            # mouse_ray = functions.convert_screen_coords_to_camera_ray(
+            #     mouse_x,
+            #     mouse_y,
+            #     app.screen.get_width(),
+            #     app.screen.get_height(),
+            #     cam=scene.cam,
+            # )
+            # hits = functions.rayScene(mouse_ray, scene)
+            # hits = [
+            #     h
+            #     for h in hits
+            #     if isinstance(h[1], Triangle | Sphere) and not h[1] == mouse_sphere
+            # ]
+            # if hits:
+            #     mouse_sphere.pos = hits[0][2]
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                # middle mouse button
+                if event.button == 2:
+                    # store the current position here to reset it later
+                    app.MOUSE_LAST_POS[0] = mouse_x
+                    app.MOUSE_LAST_POS[1] = mouse_y
+                    # set the flag
+                    app.MMB_PRESSED = True
+                    print("mmb pressed")
+
+            if event.type == pygame.MOUSEBUTTONUP:
+                if event.button == 1:
+                    pass
+                elif event.button == 2:
+                    app.MOUSE_LAST_POS[0] = mouse_x
+                    app.MOUSE_LAST_POS[1] = mouse_y
+                    app.MMB_PRESSED = False
+
+            if event.type == pygame.MOUSEWHEEL:
+                scroll = event.precise_y
+
+                scene.cam.fov += -1 * scroll * cam_scroll_speed_adjusted
+
+            if app.MMB_PRESSED:
+
+                mouse_dx = mouse_x - app.MOUSE_LAST_POS[0]
+                mouse_dy = mouse_y - app.MOUSE_LAST_POS[1]
+
+                app.MOUSE_LAST_POS[0] = mouse_x
+                app.MOUSE_LAST_POS[1] = mouse_y
+
+                print(app.MOUSE_LAST_POS)
+
+                dyaw = -1 * mouse_dx * cam_angular_speed_adjusted
+                dpitch = -1 * mouse_dy * cam_angular_speed_adjusted
+
+                cam.csys.ryg(dyaw)
+                cam.csys.rxp(dpitch)
+                pass
 
 
 class RayTracerDynamic(ProgramABC):
@@ -429,8 +565,8 @@ class RayTracerDynamic(ProgramABC):
             standalone,
             require,
         )
-        self.MAX_RAY_BOUNCES = 2
-        self.RAYS_PER_PIXEL = 16
+        self.MAX_RAY_BOUNCES = 6
+        self.RAYS_PER_PIXEL = 1
 
         self.sphere_buffer_binding = 1
         self.is_scene_static = True
@@ -505,7 +641,6 @@ class RayTracerDynamic(ProgramABC):
         spheres = scene.spheres
 
         self.program["MAX_BOUNCES"].write(struct.pack("i", self.MAX_RAY_BOUNCES))
-        print(self.MAX_RAY_BOUNCES)
 
         # self.is_scene_static = False
         # time = pygame.time.get_ticks() / np.float32(1000.0)
@@ -553,8 +688,9 @@ class RayTracerDynamic(ProgramABC):
 
         self.context.gc()
 
-    def handle_interactions(
+    def handle_event(
         self,
+        event,
         app: Application,
         cam: Camera,
         scene: Scene,
@@ -572,124 +708,118 @@ class RayTracerDynamic(ProgramABC):
 
         # mouse_sphere = scene.spheres[-1]
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-                pygame.quit()
-                sys.exit()
+        if keyboard_enabled:
 
-            if keyboard_enabled:
+            key_state = pygame.key.get_pressed()
+            if key_state[pygame.K_w]:
+                cam.csys.tzp(1 * cam_linear_speed_adjusted)
+                self.is_scene_static = False
+            if key_state[pygame.K_s]:
+                cam.csys.tzp(-1 * cam_linear_speed_adjusted)
+                self.is_scene_static = False
+            if key_state[pygame.K_d]:
+                cam.csys.txp(1 * cam_linear_speed_adjusted)
+                self.is_scene_static = False
+            if key_state[pygame.K_a]:
+                cam.csys.txp(-1 * cam_linear_speed_adjusted)
+                self.is_scene_static = False
+            if key_state[pygame.K_q]:
+                cam.csys.rzp(-1 * cam_roll_speed_adjusted)
+                self.is_scene_static = False
+            if key_state[pygame.K_e]:
+                cam.csys.rzp(cam_roll_speed_adjusted)
+                self.is_scene_static = False
+            if key_state[pygame.K_SPACE]:
+                cam.csys.tyg(1 * cam_linear_speed_adjusted)
+                self.is_scene_static = False
+            if key_state[pygame.K_LCTRL]:
+                cam.csys.tyg(-1 * cam_linear_speed_adjusted)
+                self.is_scene_static = False
 
-                key_state = pygame.key.get_pressed()
-                if key_state[pygame.K_w]:
-                    cam.csys.tzp(1 * cam_linear_speed_adjusted)
-                    self.is_scene_static = False
-                if key_state[pygame.K_s]:
-                    cam.csys.tzp(-1 * cam_linear_speed_adjusted)
-                    self.is_scene_static = False
-                if key_state[pygame.K_d]:
-                    cam.csys.txp(1 * cam_linear_speed_adjusted)
-                    self.is_scene_static = False
-                if key_state[pygame.K_a]:
-                    cam.csys.txp(-1 * cam_linear_speed_adjusted)
-                    self.is_scene_static = False
-                if key_state[pygame.K_q]:
-                    cam.csys.rzp(-1 * cam_roll_speed_adjusted)
-                    self.is_scene_static = False
-                if key_state[pygame.K_e]:
-                    cam.csys.rzp(cam_roll_speed_adjusted)
-                    self.is_scene_static = False
-                if key_state[pygame.K_SPACE]:
-                    cam.csys.tyg(1 * cam_linear_speed_adjusted)
-                    self.is_scene_static = False
-                if key_state[pygame.K_LCTRL]:
-                    cam.csys.tyg(-1 * cam_linear_speed_adjusted)
-                    self.is_scene_static = False
+            if key_state[pygame.K_0]:
+                self.MAX_RAY_BOUNCES = 0
+                self.is_scene_static = False
+            if key_state[pygame.K_1]:
+                self.MAX_RAY_BOUNCES = 1
+                self.is_scene_static = False
+            if key_state[pygame.K_2]:
+                self.MAX_RAY_BOUNCES = 2
+                self.is_scene_static = False
+            if key_state[pygame.K_3]:
+                self.MAX_RAY_BOUNCES = 3
+                self.is_scene_static = False
+            if key_state[pygame.K_4]:
+                self.MAX_RAY_BOUNCES = 4
+                self.is_scene_static = False
+            if key_state[pygame.K_5]:
+                self.MAX_RAY_BOUNCES = 5
+                self.is_scene_static = False
+            if key_state[pygame.K_6]:
+                self.MAX_RAY_BOUNCES = 6
+                self.is_scene_static = False
+            if key_state[pygame.K_7]:
+                self.MAX_RAY_BOUNCES = 7
+                self.is_scene_static = False
+            if key_state[pygame.K_8]:
+                self.MAX_RAY_BOUNCES = 8
+                self.is_scene_static = False
 
-                if key_state[pygame.K_0]:
-                    self.MAX_RAY_BOUNCES = 0
-                    self.is_scene_static = False
-                if key_state[pygame.K_1]:
-                    self.MAX_RAY_BOUNCES = 1
-                    self.is_scene_static = False
-                if key_state[pygame.K_2]:
-                    self.MAX_RAY_BOUNCES = 2
-                    self.is_scene_static = False
-                if key_state[pygame.K_3]:
-                    self.MAX_RAY_BOUNCES = 3
-                    self.is_scene_static = False
-                if key_state[pygame.K_4]:
-                    self.MAX_RAY_BOUNCES = 4
-                    self.is_scene_static = False
-                if key_state[pygame.K_5]:
-                    self.MAX_RAY_BOUNCES = 5
-                    self.is_scene_static = False
-                if key_state[pygame.K_6]:
-                    self.MAX_RAY_BOUNCES = 6
-                    self.is_scene_static = False
-                if key_state[pygame.K_7]:
-                    self.MAX_RAY_BOUNCES = 7
-                    self.is_scene_static = False
-                if key_state[pygame.K_8]:
-                    self.MAX_RAY_BOUNCES = 8
-                    self.is_scene_static = False
+        if mouse_enabled:
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+            mouse_ray = functions.convert_screen_coords_to_camera_ray(
+                mouse_x,
+                mouse_y,
+                app.screen.get_width(),
+                app.screen.get_height(),
+                cam=scene.cam,
+            )
+            hits = functions.rayScene(mouse_ray, scene)
+            hits = [h for h in hits if isinstance(h[1], Triangle | Sphere)]
+            if hits:
+                # mouse_sphere.pos = hits[0][2]
+                pass
 
-            if mouse_enabled:
-                mouse_x, mouse_y = pygame.mouse.get_pos()
-                mouse_ray = functions.convert_screen_coords_to_camera_ray(
-                    mouse_x,
-                    mouse_y,
-                    app.screen.get_width(),
-                    app.screen.get_height(),
-                    cam=scene.cam,
-                )
-                hits = functions.rayScene(mouse_ray, scene)
-                hits = [h for h in hits if isinstance(h[1], Triangle | Sphere)]
-                if hits:
-                    # mouse_sphere.pos = hits[0][2]
-                    pass
-
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    # middle mouse button
-                    if event.button == 2:
-                        # store the current position here to reset it later
-                        app.MOUSE_LAST_POS[0] = mouse_x
-                        app.MOUSE_LAST_POS[1] = mouse_y
-                        # set the flag
-                        app.MMB_PRESSED = True
-
-                if event.type == pygame.MOUSEBUTTONUP:
-                    if event.button == 1:
-                        pass
-                    elif event.button == 2:
-                        app.MOUSE_LAST_POS[0] = mouse_x
-                        app.MOUSE_LAST_POS[1] = mouse_y
-                        app.MMB_PRESSED = False
-
-                if event.type == pygame.MOUSEWHEEL:
-                    scroll = event.precise_y
-
-                    scene.cam.fov += -1 * scroll * cam_scroll_speed_adjusted
-                    self.is_scene_static = False
-
-                if app.MMB_PRESSED:
-
-                    mouse_dx = mouse_x - app.MOUSE_LAST_POS[0]
-                    mouse_dy = mouse_y - app.MOUSE_LAST_POS[1]
-
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                # middle mouse button
+                if event.button == 2:
+                    # store the current position here to reset it later
                     app.MOUSE_LAST_POS[0] = mouse_x
                     app.MOUSE_LAST_POS[1] = mouse_y
+                    # set the flag
+                    app.MMB_PRESSED = True
 
-                    print(app.MOUSE_LAST_POS)
-
-                    dyaw = -1 * mouse_dx * cam_angular_speed_adjusted
-                    dpitch = -1 * mouse_dy * cam_angular_speed_adjusted
-
-                    cam.csys.ryg(dyaw)
-                    cam.csys.rxp(dpitch)
-                    self.is_scene_static = False
-
+            if event.type == pygame.MOUSEBUTTONUP:
+                if event.button == 1:
                     pass
+                elif event.button == 2:
+                    app.MOUSE_LAST_POS[0] = mouse_x
+                    app.MOUSE_LAST_POS[1] = mouse_y
+                    app.MMB_PRESSED = False
+
+            if event.type == pygame.MOUSEWHEEL:
+                scroll = event.precise_y
+
+                scene.cam.fov += -1 * scroll * cam_scroll_speed_adjusted
+                self.is_scene_static = False
+
+            if app.MMB_PRESSED:
+
+                mouse_dx = mouse_x - app.MOUSE_LAST_POS[0]
+                mouse_dy = mouse_y - app.MOUSE_LAST_POS[1]
+
+                app.MOUSE_LAST_POS[0] = mouse_x
+                app.MOUSE_LAST_POS[1] = mouse_y
+
+                print(app.MOUSE_LAST_POS)
+
+                dyaw = -1 * mouse_dx * cam_angular_speed_adjusted
+                dpitch = -1 * mouse_dy * cam_angular_speed_adjusted
+
+                cam.csys.ryg(dyaw)
+                cam.csys.rxp(dpitch)
+                self.is_scene_static = False
+
+                pass
 
 
 class RayTracerStatic(ProgramABC):
@@ -777,6 +907,7 @@ class RayTracerStatic(ProgramABC):
 
 
 def generic_camera_event_handler(
+    event,
     app: Application,
     cam: Camera,
     scene: Scene,

@@ -292,8 +292,8 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
     }
 
     // hitInfo.normal = tri.normalA;
-    hitInfo.normal = N / float(length(N));
-    // hitInfo.normal = tri.normalA * u + tri.normalB * v + tri.normalC * w;
+    // hitInfo.normal = N / float(length(N));
+    hitInfo.normal = tri.normalA * u + tri.normalB * v + tri.normalC * w;
     hitInfo.didHit = true;
     // hitInfo.material = tri.material;
     hitInfo.dst = t;
@@ -606,6 +606,16 @@ vec3 traceRay(Ray ray, inout uint rngState)
 }
 
 
+
+vec4 toneMap(vec4 color) 
+{
+    return color / (color + vec4(1.0));
+}
+vec4 gammaCorrect(vec4 color, float gamma)
+{
+    return pow(color, vec4(1.0 / gamma));
+}
+
 void main() 
 {
 
@@ -659,7 +669,12 @@ void main()
         float weight = 1.0 / (float(frameNumber) + 1);
         color = 
         texture(previousFrame, (fragPosition.xy + 1.0) / 2) * (1-weight)
-        + vec4(totalIncomingLight, 1.0) * weight
+        +
+        // gammaCorrect(
+        // toneMap(
+        vec4(totalIncomingLight, 1.0) * weight
+        // )
+        // , 1.0)
         ;
     }
     else 
