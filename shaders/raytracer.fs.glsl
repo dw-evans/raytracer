@@ -69,6 +69,7 @@ layout(std140) uniform materialBuffer
 };
 
 vec3 skyColor = atmosphereMaterial.color.xyz;
+// vec3 skyColor = vec3(0.4, 0.4, 0.4);
 
 
 struct Sphere
@@ -517,23 +518,14 @@ vec3 traceRay(Ray ray, inout uint rngState)
 
             if (material.transmission > 0.001)
             {
+
+
                 float n1 = ray.prevHit.material.ior;
                 float n2 = material.ior;
                 float eta = n1 / n2;
 
-                // specularDir = refract(ray.dir, normalFlip * hitInfo.normal, eta);
-                // diffuseDir = normalize(normalFlip * hitInfo.normal + randomDirection(rngState));
-                // // if it hits the back side, refract is entering the atmosphere materia
-                // // if it hits the front side, it picks up the material colour
-                // if (hitInfo.hitBackside)
-                // {
-                //     // exiting the material
-                //     rayColor *= vec3(1.0);
-                // } else
-                // {
-                //     // entering the material
-                //     rayColor *= material.color.xyz;
-                // }
+
+
 
                 // technically there is a -1 * -1, I think? 
                 specularDir = refract(ray.dir, normalFlip * hitInfo.normal, eta);
@@ -556,6 +548,16 @@ vec3 traceRay(Ray ray, inout uint rngState)
                     if (randomValue(rngState) > shlickRatio)
                     {
                         // it refracts successfully
+                        vec3 transmissionColor;
+                        Material transmissionMaterial = ray.prevHit.material;
+                        float attenuationCoeff = -log(transmissionMaterial.transmission);
+                        transmissionColor = 
+                        transmissionMaterial.color.xyz * exp(-attenuationCoeff* hitInfo.dst)
+                        ;
+                        // multiply it by the transmission color before doing the other calculations
+                        rayColor *= transmissionColor;
+
+                        
                         diffuseDir = normalize(-1 * normalFlip * hitInfo.normal + randomDirection(rngState));
                         // if it hits the back side, refract is entering the atmosphere materia
                         // if it hits the front side, it picks up the material colour

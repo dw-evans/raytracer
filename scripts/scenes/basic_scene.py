@@ -53,7 +53,7 @@ material_plain_5 = Material(
 material_light_source_1 = Material(
     Vector4((0.0, 0.0, 0.0, 1.0), dtype="f4"),
     Vector3((1, 1, 1), dtype="f4"),
-    5.0,
+    10.0,
 )
 material_light_source_2 = Material(
     Vector4((0.0, 0.0, 0.0, 1.0), dtype="f4"),
@@ -78,19 +78,19 @@ spheres = [
         radius=10.0,
         material=material_plain_1,
     ),
+    # Sphere(
+    #     pos=Vector3((3, 3, 1), dtype="f4"),
+    #     radius=0.5,
+    #     material=material_plain_4,
+    # ),
+    # Sphere(
+    #     pos=Vector3((-2, 3, 4), dtype="f4"),
+    #     radius=1,
+    #     material=material_plain_4,
+    # ),
     Sphere(
-        pos=Vector3((3, 3, 1), dtype="f4"),
-        radius=0.5,
-        material=material_plain_4,
-    ),
-    Sphere(
-        pos=Vector3((-2, 3, 4), dtype="f4"),
-        radius=1,
-        material=material_plain_4,
-    ),
-    Sphere(
-        pos=Vector3((2, 0.5, 0), dtype="f4"),
-        radius=0.5,
+        pos=Vector3((5, 5, 0), dtype="f4"),
+        radius=3,
         material=material_light_source_1,
     ),
     Sphere(
@@ -183,13 +183,13 @@ scene4 = Scene()
 
 scene4.spheres = spheres
 
-stl_file = Path() / "objects/warped_cube.stl"
+stl_file = Path() / "objects/gem.stl"
 
 glass_material = Material(
-    color=Vector4((0.9, 1.0, 1.0, 1.0)),
+    color=Vector4((1.0, 0.9, 0.9, 1.0)),
     smoothness=1.0,
-    transmission=1.0,
-    ior=1.2,
+    transmission=0.3,
+    ior=1.6,
 )
 
 msh1 = Mesh.from_stl(
@@ -198,9 +198,8 @@ msh1 = Mesh.from_stl(
 )
 scene4.meshes.append(msh1)
 
-msh1.csys.tp(Vector3((0, 0.5, 6.0)))
+msh1.csys.tp(Vector3((0, -0.5, 6.0)))
 msh1.csys.rzg(270)
-
 msh1.csys.rxg(90)
 
 atmosphere_material = Material(

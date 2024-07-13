@@ -523,7 +523,7 @@ class RayTracerDynamic(ProgramABC):
         program["depthOfFieldStrength"].write(
             struct.pack("f", CAM_DEPTH_OF_FIELD_STRENGTH),
         )
-        CAM_ANTIALIAS_STRENGTH = 0.000
+        CAM_ANTIALIAS_STRENGTH = 0.000001
         program["depthOfFieldStrength"].write(
             struct.pack("f", CAM_ANTIALIAS_STRENGTH),
         )
@@ -606,22 +606,33 @@ class RayTracerDynamic(ProgramABC):
                     cam.csys.tyg(-1 * cam_linear_speed_adjusted)
                     self.is_scene_static = False
 
+                if key_state[pygame.K_0]:
+                    self.MAX_RAY_BOUNCES = 0
+                    self.is_scene_static = False
                 if key_state[pygame.K_1]:
                     self.MAX_RAY_BOUNCES = 1
+                    self.is_scene_static = False
                 if key_state[pygame.K_2]:
                     self.MAX_RAY_BOUNCES = 2
+                    self.is_scene_static = False
                 if key_state[pygame.K_3]:
                     self.MAX_RAY_BOUNCES = 3
+                    self.is_scene_static = False
                 if key_state[pygame.K_4]:
                     self.MAX_RAY_BOUNCES = 4
+                    self.is_scene_static = False
                 if key_state[pygame.K_5]:
                     self.MAX_RAY_BOUNCES = 5
+                    self.is_scene_static = False
                 if key_state[pygame.K_6]:
                     self.MAX_RAY_BOUNCES = 6
+                    self.is_scene_static = False
                 if key_state[pygame.K_7]:
                     self.MAX_RAY_BOUNCES = 7
+                    self.is_scene_static = False
                 if key_state[pygame.K_8]:
                     self.MAX_RAY_BOUNCES = 8
+                    self.is_scene_static = False
 
             if mouse_enabled:
                 mouse_x, mouse_y = pygame.mouse.get_pos()
