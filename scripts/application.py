@@ -40,6 +40,7 @@ import sys
 from typing import Generator
 
 from scripts.scenes import basic_scene
+from scripts.scenes import animated_scene
 
 
 from functools import partial
@@ -87,7 +88,8 @@ class Application:
         # self.display_scene = basic_scene.scene
         # self.display_scene = basic_scene.scene2
         # self.display_scene = basic_scene.scene3
-        self.display_scene = basic_scene.scene4
+        # self.display_scene = basic_scene.scene4
+        self.display_scene = animated_scene.scene
 
         self.display_scene.cam.fov = 45
 
@@ -111,6 +113,11 @@ class Application:
         )
 
         self.is_waiting_to_toggle = False
+        self.is_animating = False
+        self.animation_clock = 0.0
+        self.dt = 1 / self.DYNAMIC_RENDER_FRAMERATE
+        self.reset_anim_key_pressed = False
+        self.pause_play_anim_key_pressed = False
 
     def start(self):
         self.running = True
@@ -186,27 +193,47 @@ class Application:
                     pygame.quit()
                     sys.exit()
 
-                if event.type == pygame.KEYDOWN:
+                elif event.type == pygame.KEYDOWN:
+                    # TAB is used to togggle which renderer to use. Not sure how it knows which
+                    # one to be writing to the screen
                     if event.key == pygame.K_TAB:
                         if not self.is_waiting_to_toggle:
                             self.is_waiting_to_toggle = True
                             self.toggle_renderer()
                             self.run()
 
+                    # H will be used to return to time zero
+                    elif event.key == pygame.K_h:
+                        if not self.reset_anim_key_pressed:
+                            self.reset_anim_key_pressed = True
+                            self.is_animating = False
+                            self.animation_clock = 0.0
+                    # J will be used to play/pause
+                    elif event.key == pygame.K_j:
+                        if not self.pause_play_anim_key_pressed:
+                            self.pause_play_anim_key_pressed = True
+                            if not self.is_animating:
+                                self.is_animating = True
+                            else:
+                                self.is_animating = False
+
                 elif event.type == pygame.KEYUP:
                     if event.key == pygame.K_TAB:
                         self.is_waiting_to_toggle = False
 
+                    elif event.key == pygame.K_h:
+                        self.reset_anim_key_pressed = False
+
+                    elif event.key == pygame.K_j:
+                        self.pause_play_anim_key_pressed = False
+
                 program_event_handler(event)
 
-                # self.display_program.handle_event(
-                #     event=event,
-                #     app=self,
-                #     cam=self.display_scene.cam,
-                #     scene=self.display_scene,
-                #     keyboard_enabled=True,
-                #     mouse_enabled=True,
-                # )
+            if self.is_animating:
+                print(self.animation_clock)
+                self.display_scene.animate(time=self.animation_clock)
+                self.display_program.configure_program(self.display_scene)
+                self.animation_clock = self.animation_clock + self.dt
 
             self.display_program.calculate_frame(self.display_scene)
             pygame.display.flip()
@@ -401,10 +428,7 @@ class DefaultShaderProgram(ProgramABC):
         mesh_buffer.bind_to_uniform_block(mesh_buffer_binding)
 
         sky_color = Vector3((131, 200, 228), dtype="f4") / 255
-
         program["skyColor"].write(struct.pack("3f", *sky_color))
-
-        # program["RAYS_PER_PIXEL"].write(struct.pack("i", 4))
 
     def calculate_frame(self, scene: Scene):
 
@@ -566,7 +590,7 @@ class RayTracerDynamic(ProgramABC):
             require,
         )
         self.MAX_RAY_BOUNCES = 6
-        self.RAYS_PER_PIXEL = 12
+        self.RAYS_PER_PIXEL = 16
 
         self.sphere_buffer_binding = 1
         self.is_scene_static = True
@@ -624,7 +648,9 @@ class RayTracerDynamic(ProgramABC):
         # sky_color = Vector3((131, 200, 228), dtype="f4") / 255
         # program["skyColor"].write(struct.pack("3f", *sky_color))
 
-        material_buffer = context.buffer(basic_scene.atmosphere_material.tobytes())
+        material_buffer = context.buffer(
+            self.app.display_scene.atmosphere_material.tobytes()
+        )
         material_buffer_binding = 11
         program["materialBuffer"].binding = material_buffer_binding
         material_buffer.bind_to_uniform_block(material_buffer_binding)

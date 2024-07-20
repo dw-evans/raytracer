@@ -9,6 +9,7 @@ from stl import mesh
 import copy
 import pyrr
 import trimesh
+from .animate import Animation
 
 
 class HitInfo:
@@ -522,6 +523,12 @@ class Scene:
         self.spheres: list[Sphere] = []
         self.cam = Camera()
         self.selected_objects: list[Triangle | Mesh | Sphere] = []
+        self.animations: list[Animation] = []
+        self.atmosphere_material: Material = Material(
+            Vector4((1.0, 1.0, 1.0, 1.0), dtype="f4"),
+            transmission=1.0,
+            ior=1.0,
+        )
 
     def get_mesh_index(self, msh: Mesh) -> int:
         try:
@@ -559,3 +566,7 @@ class Scene:
     def serialiser(self) -> str:
         raise NotImplementedError
         pass
+
+    def animate(self, time: float) -> None:
+        for anim in self.animations:
+            anim.evaluate(time)
