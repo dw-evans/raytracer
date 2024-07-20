@@ -175,7 +175,7 @@ class Triangle(ByteableObject):
                 self.parent.mesh_index,
                 self.triangle_id,
             )
-            + self.material.tobytes()
+            # + self.material.tobytes()
         )
 
     def update_pos_with_mesh(self) -> Triangle:
@@ -225,22 +225,26 @@ class Mesh(ByteableObject):
     # an arbitrary counter that keeps a UID for each mesh
     MESH_INDEX = 0
 
-    def __init__(self) -> None:
+    def __init__(self, material: Material) -> None:
         self.pos: Vector3 = Vector3((0.0, 0.0, 0.0))
         self.triangles: list[Triangle] = []
         self.csys = Csys()
         self.mesh_index = self.MESH_INDEX
+        self.material = material
 
         Mesh.MESH_INDEX += 1
 
     def tobytes(self) -> bytes | bytearray:
 
         bbox = self.bounding_box
-        return struct.pack(
-            "i12x 3f4x 3f4x",
-            self.mesh_index,
-            *bbox[0],
-            *bbox[1],
+        return (
+            struct.pack(
+                "i12x 3f4x 3f4x",
+                self.mesh_index,
+                *bbox[0],
+                *bbox[1],
+            )
+            + self.material.tobytes()
         )
 
     # @property
@@ -264,7 +268,7 @@ class Mesh(ByteableObject):
     def from_stl(cls, file: str, material: Material = Material()):
         """Creates a mesh from a stl file"""
         mesh_data = mesh.Mesh.from_file(file)
-        ret = Mesh()
+        ret = Mesh(material=material)
         tris = []
         for facet in mesh_data.data:
             facet: np.ndarray
@@ -280,7 +284,7 @@ class Mesh(ByteableObject):
                     normalB=normal,
                     normalC=normal,
                     parent=None,
-                    material=material,
+                    # material=material,
                 )
             )
         ret.add_tri(tris)
@@ -289,7 +293,7 @@ class Mesh(ByteableObject):
     @classmethod
     def from_obj(cls, file: str, material: Material = Material()):
         msh = trimesh.load(file)
-        ret = Mesh()
+        ret = Mesh(material=material)
         tris = []
         for face in msh.faces:
             vertex_indices = face

@@ -566,7 +566,7 @@ class RayTracerDynamic(ProgramABC):
             require,
         )
         self.MAX_RAY_BOUNCES = 6
-        self.RAYS_PER_PIXEL = 1
+        self.RAYS_PER_PIXEL = 12
 
         self.sphere_buffer_binding = 1
         self.is_scene_static = True
@@ -588,7 +588,7 @@ class RayTracerDynamic(ProgramABC):
         program["STATIC_RENDER"].write(struct.pack("i", True))
         program["MAX_BOUNCES"].write(struct.pack("i", self.MAX_RAY_BOUNCES))
         program["RAYS_PER_PIXEL"].write(struct.pack("i", self.RAYS_PER_PIXEL))
-        program["RAYS_PER_PIXEL"].write(struct.pack("i", 1))
+        # program["RAYS_PER_PIXEL"].write(struct.pack("i", 1))
 
         texture = context.texture((self.width, self.height), 3)
         texture.use(location=1)

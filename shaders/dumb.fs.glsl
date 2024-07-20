@@ -73,7 +73,7 @@ struct Triangle
     vec3 normalC; // 12 + 4
     int meshIndex; // 4 + 12
     int triId;
-    Material material; // ...
+    // Material material; // ...
 };
 
 
@@ -96,6 +96,7 @@ struct Mesh
     int index;
     vec3 bboxMin;
     vec3 bboxMax;
+    Material material;
 };
 
 layout(std140) uniform meshBuffer 
@@ -369,7 +370,8 @@ HitInfo calculateRayCollision(Ray ray)
             }
             else
             {
-                closestHit.material = tri.material;
+                // closestHit.material = tri.material;
+                closestHit.material = meshes[tri.meshIndex].material;
             }
             
         }
