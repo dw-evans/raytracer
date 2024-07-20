@@ -349,8 +349,39 @@ bool boundingBoxIntersect(Ray ray, vec3 bboxMin, vec3 bboxMax)
     return true; 
 }
 
+// TODO find a better implementation of a random number generator.
 
-HitInfo calculateRayCollision(Ray ray)
+float randomValue(inout uint state) 
+{
+    state *= (state + uint(195439)) * (state + uint(124395)) * (state + uint(845921));
+    return state / 4294967295.0;
+}
+
+vec3 randomDirection(inout uint rngState) 
+{
+    // calculates a random vector in a sphere
+    float u = randomValue(rngState);
+    float v = randomValue(rngState);
+
+    float theta = 2.0 * pi * u;
+    float phi = acos(2.0 * v - 1.0);
+
+    return vec3(
+        sin(phi) * cos(theta),
+        sin(phi) * sin(theta),
+        cos(phi)
+    );
+}
+vec3 randomDirectionHemisphere(vec3 normal, inout uint rngState) 
+{
+    vec3 randomDir = randomDirection(rngState);
+    // return normal;
+    return sign(dot(randomDir, normal)) * randomDir;
+}
+
+
+
+HitInfo calculateRayCollision(Ray ray, inout uint rngState)
 {
     // calculates the ray collisions for all 
     HitInfo closestHit = defaultHitInfo();
@@ -433,35 +464,6 @@ HitInfo calculateRayCollision(Ray ray)
     return closestHit;
 }
 
-// TODO find a better implementation of a random number generator.
-
-float randomValue(inout uint state) 
-{
-    state *= (state + uint(195439)) * (state + uint(124395)) * (state + uint(845921));
-    return state / 4294967295.0;
-}
-
-vec3 randomDirection(inout uint rngState) 
-{
-    // calculates a random vector in a sphere
-    float u = randomValue(rngState);
-    float v = randomValue(rngState);
-
-    float theta = 2.0 * pi * u;
-    float phi = acos(2.0 * v - 1.0);
-
-    return vec3(
-        sin(phi) * cos(theta),
-        sin(phi) * sin(theta),
-        cos(phi)
-    );
-}
-vec3 randomDirectionHemisphere(vec3 normal, inout uint rngState) 
-{
-    vec3 randomDir = randomDirection(rngState);
-    // return normal;
-    return sign(dot(randomDir, normal)) * randomDir;
-}
 
 
 float schlickApproximation(float n1, float n2, float theta)
@@ -501,15 +503,29 @@ vec3 traceRay(Ray ray, inout uint rngState)
     vec3 emittedLight;
     Material material;
 
+
     for (int i = 0; i <= MAX_BOUNCES; i++)
     {
-        HitInfo hitInfo = calculateRayCollision(ray);
+        HitInfo hitInfo = calculateRayCollision(ray, rngState);
         if (hitInfo.didHit)
         {
             // vec3 diffuseDir = normalize(hitInfo.normal + randomDirection(rngState));
             // vec3 specularDir = reflect(ray.dir, hitInfo.normal);
 
             material = hitInfo.material;
+
+            // deal with transparency by allowing some fraction of the rays to pass through
+            // do no do any color modifications if it passes through.
+            if ((hitInfo.didHit) && (hitInfo.material.color.w < 0.99999))
+            {
+                if (randomValue(rngState) > hitInfo.material.color.w)
+                {
+                    // move the ray origin to its hit point but dont modify direction
+                    ray.origin = hitInfo.hitPoint;
+                    ray.prevHit = hitInfo;
+                    continue;
+                }
+            }   
 
             emittedLight = material.emissionColor * material.emissionStrength;
             incomingLight += emittedLight * rayColor;
@@ -518,16 +534,13 @@ vec3 traceRay(Ray ray, inout uint rngState)
             // +1 if hits front side
             int normalFlip = -1 * (int(hitInfo.hitBackside) * 2 - 1);
 
-            if (material.transmission > 0.001)
-            {
 
+            if (material.transmission > 1e-6)
+            {
 
                 float n1 = ray.prevHit.material.ior;
                 float n2 = material.ior;
                 float eta = n1 / n2;
-
-
-
 
                 // technically there is a -1 * -1, I think? 
                 specularDir = refract(ray.dir, normalFlip * hitInfo.normal, eta);
@@ -557,7 +570,7 @@ vec3 traceRay(Ray ray, inout uint rngState)
                         transmissionMaterial.color.xyz * exp(-attenuationCoeff* hitInfo.dst)
                         ;
                         // multiply it by the transmission color before doing the other calculations
-                        rayColor *= transmissionColor;
+                        rayColor *= transmissionColor * transmissionMaterial.color.w;
 
                         
                         diffuseDir = normalize(-1 * normalFlip * hitInfo.normal + randomDirection(rngState));

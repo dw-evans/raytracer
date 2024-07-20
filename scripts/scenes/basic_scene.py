@@ -18,7 +18,6 @@ from pyrr import (
 
 from pathlib import Path
 
-scene = Scene()
 
 material_plain_1 = Material(
     Vector4((1.0, 0.5, 0.0, 1.0), dtype="f4"),
@@ -101,10 +100,10 @@ spheres = [
 ]
 
 
-scene4 = Scene()
+scene = Scene()
 
 
-scene4.spheres = spheres
+scene.spheres = spheres
 
 glass_material = Material(
     color=Vector4((1.0, 0.9, 0.9, 1.0)),
@@ -131,11 +130,22 @@ msh1.csys.tp(Vector3((0, -0.5, 6.0)))
 msh1.csys.ryg(90)
 # msh1.csys.rxg(90)
 
-scene4.meshes.append(msh1)
+scene.meshes.append(msh1)
 
 
 atmosphere_material = Material(
-    Vector4((1.0, 1.0, 1.0, 1.0), dtype="f4"),
+    Vector4(
+        (
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+        ),
+        dtype="f4",
+    ),
     transmission=1.0,
     ior=1.0,
 )
+
+
+scene.atmosphere_material = atmosphere_material

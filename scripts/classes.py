@@ -530,6 +530,10 @@ class Scene:
             ior=1.0,
         )
 
+    def validate_mesh_indices(self):
+        for msh in self.meshes:
+            msh.mesh_index = self.get_mesh_index(msh)
+
     def get_mesh_index(self, msh: Mesh) -> int:
         try:
             return self.meshes.index(msh)

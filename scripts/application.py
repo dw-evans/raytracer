@@ -88,8 +88,10 @@ class Application:
         # self.display_scene = basic_scene.scene
         # self.display_scene = basic_scene.scene2
         # self.display_scene = basic_scene.scene3
-        # self.display_scene = basic_scene.scene4
+        # self.display_scene = basic_scene.scene
         self.display_scene = animated_scene.scene
+
+        self.display_scene.validate_mesh_indices()
 
         self.display_scene.cam.fov = 45
 
