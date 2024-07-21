@@ -9,7 +9,6 @@ from stl import mesh
 import copy
 import pyrr
 import trimesh
-from .animate import Animation
 
 
 class HitInfo:
@@ -291,9 +290,6 @@ class Mesh(ByteableObject):
         ret.add_tri(tris)
         return ret
 
-    # Something is causing this to run very slowly with large models.
-    # I did some numba work and there isn't even a need to numba compile.
-    # It should load in under ten seconds for the tyre tread model
     @classmethod
     def from_obj(cls, file: str, material: Material = Material()):
         msh = trimesh.load(file)
@@ -301,16 +297,10 @@ class Mesh(ByteableObject):
         tris = []
         total_faces = len(msh.faces)
         print(f"Loading mesh `{file}`...")
-
-        # ok, the main issue was to not be doing thousands of
-        # trimesh object cache calls...
-        vertex_indices_arr = msh.faces.astype(np.int32)
-        vertices = msh.vertices.astype(np.float32)
-        vertex_normals = msh.vertex_normals.astype(np.float32)
-
-        for i, vertex_indices in enumerate(vertex_indices_arr):
-            v0, v1, v2 = vertices[vertex_indices]
-            n0, n1, n2 = vertex_normals[vertex_indices]
+        for i, face in enumerate(msh.faces):
+            vertex_indices = face
+            v0, v1, v2 = msh.vertices[vertex_indices]
+            n0, n1, n2 = msh.vertex_normals[vertex_indices]
             tris.append(
                 Triangle(
                     posA=v0,
@@ -328,7 +318,6 @@ class Mesh(ByteableObject):
 
         ret.add_tri(tris)
         print("Loading complete.")
-
         return ret
 
     @property
@@ -539,7 +528,7 @@ class Scene:
         self.spheres: list[Sphere] = []
         self.cam = Camera()
         self.selected_objects: list[Triangle | Mesh | Sphere] = []
-        self.animations: list[Animation] = []
+        self.animations: list["Animation"] = []
         self.atmosphere_material: Material = Material(
             Vector4((1.0, 1.0, 1.0, 1.0), dtype="f4"),
             transmission=1.0,

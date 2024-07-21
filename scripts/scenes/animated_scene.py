@@ -67,11 +67,11 @@ highlight_material = Material(
 )
 
 spheres = [
-    Sphere(
-        pos=Vector3((0.0, -1001.0, 8), dtype="f4"),
-        radius=1000.0,
-        material=material_plain_3,
-    ),
+    # Sphere(
+    #     pos=Vector3((0.0, -1001.0, 8), dtype="f4"),
+    #     radius=1000.0,
+    #     material=material_plain_3,
+    # ),
     Sphere(
         pos=Vector3((0.0, 3.0, 22), dtype="f4"),
         radius=10.0,
@@ -117,12 +117,19 @@ glass_material = Material(
     ior=1.6,
 )
 
+pass
+# msh1 = Mesh.from_obj(
+#     Path() / "objects/smooth_disc.obj",
+#     material=glass_material,
+# )
+
 msh1 = Mesh.from_obj(
-    Path() / "objects/smooth_disc.obj",
+    Path() / "objects/tyre_tread.obj",
     material=glass_material,
 )
-msh1.csys.tp(Vector3((0, -0.5, 6.0)))
-msh1.csys.ryg(90)
+
+msh1.csys.tp(Vector3((0, -0.5, 2.0)))
+# msh1.csys.ryg(90)
 
 scene.meshes.append(msh1)
 

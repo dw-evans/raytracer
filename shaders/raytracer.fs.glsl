@@ -13,7 +13,7 @@ uniform vec3 CamGlobalPos;
 uniform float time;
 
 const int SPHERES_COUNT_MAX = 256;
-const int TRIANGLES_COUNT_MAX = 16384;
+const int TRIANGLES_COUNT_MAX = 150000;
 const int MESHES_COUNT_MAX = 256;
 
 uniform int MAX_BOUNCES;

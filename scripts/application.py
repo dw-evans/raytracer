@@ -39,11 +39,14 @@ import threading
 import sys
 from typing import Generator
 
-from scripts.scenes import basic_scene
+# from scripts.scenes import basic_scene
 from scripts.scenes import animated_scene
 
 
 from functools import partial
+
+
+MAX_TRIANGLES_TO_LOAD = 20000
 
 
 class Application:
@@ -52,7 +55,7 @@ class Application:
         self,
     ) -> None:
         # window params
-        self.DYNAMIC_RENDER_FRAMERATE = 60
+        self.DYNAMIC_RENDER_FRAMERATE = 1
         self.WINDOW_HEIGHT = 540
         self.ASPECT_RATIO = 16 / 9
 
@@ -163,6 +166,8 @@ class Application:
             self.display_program = self.programs[list(self.programs.keys())[0]]
         else:
             self.display_program = self.programs["default"]
+
+        pass
 
     def toggle_renderer(self):
         """Function to toggle between the raytracer and the dumb one"""
@@ -416,13 +421,73 @@ class DefaultShaderProgram(ProgramABC):
 
         program["selectedMeshId"].write(struct.pack("i", -1))
 
-        triangles_ssbo = context.buffer(
-            functions.iter_to_bytes(
-                [t.update_pos_with_mesh2() for t in scene.triangles],
-            )
+        # triangles_ssbo = context.buffer(
+        #     functions.iter_to_bytes(
+        #         [t.update_pos_with_mesh2() for t in scene.triangles][:100],
+        #     )
+        # )
+
+        dtype = [
+            ("field00", "f4"),
+            ("field01", "f4"),
+            ("field02", "f4"),
+            ("field03", "f4"),
+            ("field04", "f4"),
+            ("field05", "f4"),
+            ("field06", "f4"),
+            ("field07", "f4"),
+            ("field08", "f4"),
+            ("field09", "f4"),
+            ("field10", "f4"),
+            ("field11", "f4"),
+            ("field12", "f4"),
+            ("field13", "f4"),
+            ("field14", "f4"),
+            ("field15", "f4"),
+            ("field16", "f4"),
+            ("field17", "f4"),
+            ("field18", "f4"),
+            ("field19", "f4"),
+            ("field20", "f4"),
+            ("field21", "f4"),
+            ("field22", "f4"),
+            ("field23", "i4"),
+            ("field24", "i4"),
+            ("field25", "f4"),
+            ("field26", "f4"),
+            ("field27", "f4"),
+        ]
+
+        tri_data = np.zeros(
+            min(scene.count_triangles(), MAX_TRIANGLES_TO_LOAD),
+            dtype=dtype,
         )
+
+        print(f"Loading triangles into SSBO...")
+
+        # This sequence could do with numba optimization
+        # Especially the chain of reorientations
+        # Also the loading can be drastically sped up with numba
+
+        for i, tri in enumerate(triangles[0:MAX_TRIANGLES_TO_LOAD]):
+            tri.update_pos_with_mesh2()
+            tri_data[i] = (
+                *tri.posA, 0.0,
+                *tri.posB, 0.0,
+                *tri.posC, 0.0,
+                *tri.normalA, 0.0,
+                *tri.normalB, 0.0,
+                *tri.normalC, tri.parent.mesh_index,
+                tri.triangle_id, 0.0, 0.0, 0.0,
+            )
+            if i % 1000 == 0:
+                print(f"  {i / len(triangles) * 100:.4f}%", end="\r")
+
+        print(f"Loading triangles complete.")
+
+        self.triangles_ssbo = context.buffer(tri_data.tobytes())
         triangles_ssbo_binding = 9
-        triangles_ssbo.bind_to_storage_buffer(binding=triangles_ssbo_binding)
+        self.triangles_ssbo.bind_to_storage_buffer(binding=triangles_ssbo_binding)
 
         mesh_buffer = context.buffer(functions.iter_to_bytes(scene.meshes))
         mesh_buffer_binding = 10
@@ -592,7 +657,7 @@ class RayTracerDynamic(ProgramABC):
             require,
         )
         self.MAX_RAY_BOUNCES = 6
-        self.RAYS_PER_PIXEL = 16
+        self.RAYS_PER_PIXEL = 1
 
         self.sphere_buffer_binding = 1
         self.is_scene_static = True
@@ -634,11 +699,62 @@ class RayTracerDynamic(ProgramABC):
 
         program["meshCount"].write(struct.pack("i", len(scene.meshes)))
 
-        self.triangles_ssbo = context.buffer(
-            functions.iter_to_bytes(
-                [t.update_pos_with_mesh2() for t in scene.triangles],
-            )
+        # solution to this being very slow is to vectorise it completely with arrays
+        # store all of the triangle information in an x by 18+ array and add to all
+        # self.triangles_ssbo = context.buffer(
+        #     functions.iter_to_bytes(
+        #         [t.update_pos_with_mesh2() for t in scene.triangles][:100],
+        #     )
+        # )
+
+        dtype = [
+            ("field00", "f4"),
+            ("field01", "f4"),
+            ("field02", "f4"),
+            ("field03", "f4"),
+            ("field04", "f4"),
+            ("field05", "f4"),
+            ("field06", "f4"),
+            ("field07", "f4"),
+            ("field08", "f4"),
+            ("field09", "f4"),
+            ("field10", "f4"),
+            ("field11", "f4"),
+            ("field12", "f4"),
+            ("field13", "f4"),
+            ("field14", "f4"),
+            ("field15", "f4"),
+            ("field16", "f4"),
+            ("field17", "f4"),
+            ("field18", "f4"),
+            ("field19", "f4"),
+            ("field20", "f4"),
+            ("field21", "f4"),
+            ("field22", "f4"),
+            ("field23", "i4"),
+            ("field24", "i4"),
+            ("field25", "f4"),
+            ("field26", "f4"),
+            ("field27", "f4"),
+        ]
+
+        tri_data = np.zeros(
+            min(scene.count_triangles(), MAX_TRIANGLES_TO_LOAD),
+            dtype=dtype,
         )
+
+        for i, tri in enumerate(triangles[0:MAX_TRIANGLES_TO_LOAD]):
+            tri_data[i] = (
+                *tri.posA, 0.0,
+                *tri.posB, 0.0,
+                *tri.posC, 0.0,
+                *tri.normalA, 0.0,
+                *tri.normalB, 0.0,
+                *tri.normalC, tri.parent.mesh_index,
+                tri.triangle_id, 0.0, 0.0, 0.0,
+            )
+
+        self.triangles_ssbo = context.buffer(tri_data.tobytes())
         triangles_ssbo_binding = 9
         self.triangles_ssbo.bind_to_storage_buffer(binding=triangles_ssbo_binding)
 
