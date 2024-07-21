@@ -46,7 +46,7 @@ from scripts.scenes import animated_scene
 from functools import partial
 
 
-MAX_TRIANGLES_TO_LOAD = 20000
+MAX_TRIANGLES_TO_LOAD = 200000
 
 
 class Application:
@@ -55,8 +55,8 @@ class Application:
         self,
     ) -> None:
         # window params
-        self.DYNAMIC_RENDER_FRAMERATE = 1
-        self.WINDOW_HEIGHT = 540
+        self.DYNAMIC_RENDER_FRAMERATE = 0.1
+        self.WINDOW_HEIGHT = 540 // 2
         self.ASPECT_RATIO = 16 / 9
 
         # mouse / keyboard movement camera speeds
@@ -480,7 +480,7 @@ class DefaultShaderProgram(ProgramABC):
                 *tri.normalC, tri.parent.mesh_index,
                 tri.triangle_id, 0.0, 0.0, 0.0,
             )
-            if i % 1000 == 0:
+            if i % 100 == 0:
                 print(f"  {i / len(triangles) * 100:.4f}%", end="\r")
 
         print(f"Loading triangles complete.")
