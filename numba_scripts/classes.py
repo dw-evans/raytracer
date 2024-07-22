@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from numba import jit
+from numba import jit, njit
 from numba.types import float32, int32
 from numba.experimental import jitclass
 
-import functions
-from functions import (
+from . import functions
+from .functions import (
     mat33_create_from_quaternion,
     mat44_create_from_quaternion,
     multiply_quaternions,
@@ -75,6 +75,9 @@ class Csys:
         self.quat = normalize(multiply_quaternions(self.quat, quaternion_create_from_axis_rotation(ax, rad)))
         return self
     
+    def tg(self, pos:np.ndarray) -> Csys:
+        self.pos = pos.astype(np.float32)
+
     def txg(self, dst:float) -> Csys:
         self.pos[0] += dst
         return self
@@ -169,7 +172,118 @@ class Triangle:
         self.normalC = np.dot(self.normalC0, rot)
 
         return self
+    
+    @property
+    def positions(self):
+        return self.posA, self.posB, self.posC
+    
+    @property
+    def normals(self):
+        return self.normalA, self.normalB, self.normalC
+    
+#     def tobytes(self):
+#         bytes_data = (
+#             self.posA.tobytes() +
+#             self.posB.tobytes() + 
+#             self.posC.tobytes() + 
+#             self.normalA.tobytes() + 
+#             self.normalB.tobytes() + 
+#             self.normalC.tobytes() + 
+#             self.mesh_index.tobytes() + 
+#             self.triangle_id.tobytes()
+#         )
+#         return bytes_data
+    
+# @jit(nopython=True)
+# def many_triangles_to_bytes(triangles:list[Triangle]):
+#     ret = b""
+#     for i, triangle in enumerate(triangles):
+#         ret += triangle.tobytes()
 
+
+@jit(nopython=True)
+def update_triangles_to_csys(triangles:list[Triangle], csys:Csys):
+    for i, triangle in enumerate(triangles):
+        triangle.update_pos_to_csys(csys)
+
+# @jit(nopython=False)
+def triangles_to_array(triangles:list[Triangle]) -> np.ndarray:
+    """Writes triangles to an array that can be sent straight to a buffer"""
+    pass
+    dtype = [
+        ("field00", "f4"),
+        ("field01", "f4"),
+        ("field02", "f4"),
+        ("field03", "f4"),
+        ("field04", "f4"),
+        ("field05", "f4"),
+        ("field06", "f4"),
+        ("field07", "f4"),
+        ("field08", "f4"),
+        ("field09", "f4"),
+        ("field10", "f4"),
+        ("field11", "f4"),
+        ("field12", "f4"),
+        ("field13", "f4"),
+        ("field14", "f4"),
+        ("field15", "f4"),
+        ("field16", "f4"),
+        ("field17", "f4"),
+        ("field18", "f4"),
+        ("field19", "f4"),
+        ("field20", "f4"),
+        ("field21", "f4"),
+        ("field22", "f4"),
+        ("field23", "i4"),
+        ("field24", "i4"),
+        ("field25", "f4"),
+        ("field26", "f4"),
+        ("field27", "f4"),
+    ]
+
+    # I think this line with the fancy type does not play nice
+    # with the jit
+    tri_data = np.zeros(
+        len(triangles),
+        dtype=dtype,
+    )
+
+    for i, tri in enumerate(triangles):
+        tri_data[i] = (
+            *tri.posA, 0.0,
+            *tri.posB, 0.0,
+            *tri.posC, 0.0,
+            *tri.normalA, 0.0,
+            *tri.normalB, 0.0,
+            *tri.normalC, tri.mesh_index,
+            tri.triangle_id, 0.0, 0.0, 0.0,
+        )
+
+    return tri_data
+
+
+# @staticmethod
+@jit(nopython=True)
+def triangles_from_obj_data(
+    vertex_indices_arr: np.ndarray, vertices: np.ndarray, vertex_normals: np.ndarray
+) -> list[Triangle]:
+    ret = []
+    for (i, vertex_indices) in enumerate(vertex_indices_arr):
+        v0, v1, v2 = vertices[vertex_indices]
+        n0, n1, n2 = vertex_normals[vertex_indices]
+        ret.append(
+            Triangle(
+                v0,
+                v1,
+                v2,
+                n0,
+                n1,
+                n2,
+                0,
+                i,
+            )
+        )
+    return ret
 
 
 if __name__ == "__main__":

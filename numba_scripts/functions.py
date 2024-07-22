@@ -133,42 +133,6 @@ def multiply_quaternions(q1:np.ndarray, q2:np.ndarray):
 
 
 
-
-def mesh_to_triangle_matrix():
-    dtype = [
-        ("field00", "f4"),
-        ("field01", "f4"),
-        ("field02", "f4"),
-        ("field03", "f4"),
-        ("field04", "f4"),
-        ("field05", "f4"),
-        ("field06", "f4"),
-        ("field07", "f4"),
-        ("field08", "f4"),
-        ("field09", "f4"),
-        ("field10", "f4"),
-        ("field11", "f4"),
-        ("field12", "f4"),
-        ("field13", "f4"),
-        ("field14", "f4"),
-        ("field15", "f4"),
-        ("field16", "f4"),
-        ("field17", "f4"),
-        ("field18", "f4"),
-        ("field19", "f4"),
-        ("field20", "f4"),
-        ("field21", "f4"),
-        ("field22", "f4"),
-        ("field23", "i4"),
-        ("field24", "i4"),
-        ("field25", "f4"),
-        ("field26", "f4"),
-        ("field27", "f4"),
-    ]
-
-
-
-
 def obj_import_testing():
     import trimesh
     from scripts.classes import Mesh, Material, Triangle
@@ -354,7 +318,7 @@ def update_mesh_pos_testing():
 
 if __name__ == "__main__":
     # csys_comparison_testing()
-    update_mesh_pos_testing()
+    # update_mesh_pos_testing()
     pass
 
 

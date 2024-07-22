@@ -14,12 +14,18 @@ from scripts import classes
 from scripts.classes import (
     Scene,
     Sphere,
-    Triangle,
+    # Triangle,
     Mesh,
     Camera,
-    Csys,
+    # Csys,
     Material,
     HitInfo,
+)
+
+import numba_scripts.classes
+from numba_scripts.classes import (
+    Triangle,
+    Csys,
 )
 
 import pyrr
@@ -32,7 +38,6 @@ from pyrr import (
 )
 
 import numpy as np
-from numpy import sin, cos, tan
 
 import threading
 
@@ -40,7 +45,9 @@ import sys
 from typing import Generator
 
 # from scripts.scenes import basic_scene
-from scripts.scenes import animated_scene
+# from scripts.scenes import animated_scene
+from scripts.scenes import numba_test_scene
+
 
 
 from functools import partial
@@ -55,7 +62,7 @@ class Application:
         self,
     ) -> None:
         # window params
-        self.DYNAMIC_RENDER_FRAMERATE = 0.1
+        self.DYNAMIC_RENDER_FRAMERATE = 1.0
         self.WINDOW_HEIGHT = 540 // 2
         self.ASPECT_RATIO = 16 / 9
 
@@ -92,7 +99,8 @@ class Application:
         # self.display_scene = basic_scene.scene2
         # self.display_scene = basic_scene.scene3
         # self.display_scene = basic_scene.scene
-        self.display_scene = animated_scene.scene
+        # self.display_scene = animated_scene.scene
+        self.display_scene = numba_test_scene.scene
 
         self.display_scene.validate_mesh_indices()
 
@@ -245,18 +253,6 @@ class Application:
             self.display_program.calculate_frame(self.display_scene)
             pygame.display.flip()
             self.clock.tick(self.DYNAMIC_RENDER_FRAMERATE)
-
-
-def animate_csys(
-    obj: Csys,
-    f_t: callable,
-    dt: float,
-    quat0: Quaternion | None = None,
-    quat1: Quaternion | None = None,
-    pos0: Vector3 | None = None,
-    pos1: Vector3 | None = None,
-) -> Generator[Csys]:
-    pass
 
 
 class ProgramABC(ABC):
@@ -421,71 +417,19 @@ class DefaultShaderProgram(ProgramABC):
 
         program["selectedMeshId"].write(struct.pack("i", -1))
 
-        # triangles_ssbo = context.buffer(
-        #     functions.iter_to_bytes(
-        #         [t.update_pos_with_mesh2() for t in scene.triangles][:100],
-        #     )
-        # )
 
-        dtype = [
-            ("field00", "f4"),
-            ("field01", "f4"),
-            ("field02", "f4"),
-            ("field03", "f4"),
-            ("field04", "f4"),
-            ("field05", "f4"),
-            ("field06", "f4"),
-            ("field07", "f4"),
-            ("field08", "f4"),
-            ("field09", "f4"),
-            ("field10", "f4"),
-            ("field11", "f4"),
-            ("field12", "f4"),
-            ("field13", "f4"),
-            ("field14", "f4"),
-            ("field15", "f4"),
-            ("field16", "f4"),
-            ("field17", "f4"),
-            ("field18", "f4"),
-            ("field19", "f4"),
-            ("field20", "f4"),
-            ("field21", "f4"),
-            ("field22", "f4"),
-            ("field23", "i4"),
-            ("field24", "i4"),
-            ("field25", "f4"),
-            ("field26", "f4"),
-            ("field27", "f4"),
-        ]
-
-        tri_data = np.zeros(
-            min(scene.count_triangles(), MAX_TRIANGLES_TO_LOAD),
-            dtype=dtype,
-        )
+        triangles = scene.triangles
+        print(f"Updating Triangle Positions...")
+        numba_scripts.classes.update_triangles_to_csys(triangles, scene.meshes[0].csys)
 
         print(f"Loading triangles into SSBO...")
-
-        # This sequence could do with numba optimization
-        # Especially the chain of reorientations
-        # Also the loading can be drastically sped up with numba
-
-        for i, tri in enumerate(triangles[0:MAX_TRIANGLES_TO_LOAD]):
-            tri.update_pos_with_mesh2()
-            tri_data[i] = (
-                *tri.posA, 0.0,
-                *tri.posB, 0.0,
-                *tri.posC, 0.0,
-                *tri.normalA, 0.0,
-                *tri.normalB, 0.0,
-                *tri.normalC, tri.parent.mesh_index,
-                tri.triangle_id, 0.0, 0.0, 0.0,
-            )
-            if i % 100 == 0:
-                print(f"  {i / len(triangles) * 100:.4f}%", end="\r")
+        triangle_data = numba_scripts.classes.triangles_to_array(triangles)
+        # triangle_data = numba_scripts.classes.many_triangles_to_bytes(triangles)
+        triangle_bytes = triangle_data.tobytes()
 
         print(f"Loading triangles complete.")
 
-        self.triangles_ssbo = context.buffer(tri_data.tobytes())
+        self.triangles_ssbo = context.buffer(triangle_bytes)
         triangles_ssbo_binding = 9
         self.triangles_ssbo.bind_to_storage_buffer(binding=triangles_ssbo_binding)
 

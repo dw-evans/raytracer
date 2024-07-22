@@ -62,13 +62,14 @@ class Animation:
     def __init__(self, obj: T, fun: FuncOfFloat) -> None:
         self.obj = obj
         self.fun = fun
-        self.initial_state = copy.deepcopy(self.obj)
+        # self.initial_state = copy.deepcopy(self.obj)
 
     def evaluate(self, t: float) -> T:
         return self.fun(self.obj, t)
 
     def reset(self):
         """Resets the state of the object to as initialized"""
+        raise NotImplementedError
         obj = self.obj
         for key, val in self.initial_state.__dict__.items():
             setattr(obj, key, val)
