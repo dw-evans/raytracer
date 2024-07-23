@@ -163,13 +163,28 @@ class Triangle:
         trans = csys.transformation_matrix.astype(np.float32)
         rot = trans[0:3, 0:3]
 
-        self.posA = np.dot(np.array([*self.posA0, 1.0]).astype(np.float32), trans)[0:3]
-        self.posB = np.dot(np.array([*self.posB0, 1.0]).astype(np.float32), trans)[0:3]
-        self.posC = np.dot(np.array([*self.posC0, 1.0]).astype(np.float32), trans)[0:3]
+        self.posA = np.dot(np.array([*self.posA0, 1.0], dtype=np.float32), trans)[0:3]
+        self.posB = np.dot(np.array([*self.posB0, 1.0], dtype=np.float32), trans)[0:3]
+        self.posC = np.dot(np.array([*self.posC0, 1.0], dtype=np.float32), trans)[0:3]
+
+        # self.posA, self.posB, self.posC = (
+        #     np.dot(np.array([
+        #         [*self.posA0, 1.0],
+        #         [*self.posB0, 1.0],
+        #         [*self.posC0, 1.0],
+        #     ], dtype=np.float32),
+        #     trans,
+        #     )[:,:3]
+        # )
 
         self.normalA = np.dot(self.normalA0, rot)
         self.normalB = np.dot(self.normalB0, rot)
         self.normalC = np.dot(self.normalC0, rot)
+
+        # self.normalA, self.normalB, self.normalC = (
+        #     np.dot(np.array([]))
+        # )
+
 
         return self
     
@@ -207,56 +222,86 @@ def update_triangles_to_csys(triangles:list[Triangle], csys:Csys):
         triangle.update_pos_to_csys(csys)
 
 # @jit(nopython=False)
+# def triangles_to_array(triangles:list[Triangle]) -> np.ndarray:
+#     """Writes triangles to an array that can be sent straight to a buffer"""
+#     pass
+#     dtype = [
+#         ("field00", "f4"),
+#         ("field01", "f4"),
+#         ("field02", "f4"),
+#         ("field03", "f4"),
+#         ("field04", "f4"),
+#         ("field05", "f4"),
+#         ("field06", "f4"),
+#         ("field07", "f4"),
+#         ("field08", "f4"),
+#         ("field09", "f4"),
+#         ("field10", "f4"),
+#         ("field11", "f4"),
+#         ("field12", "f4"),
+#         ("field13", "f4"),
+#         ("field14", "f4"),
+#         ("field15", "f4"),
+#         ("field16", "f4"),
+#         ("field17", "f4"),
+#         ("field18", "f4"),
+#         ("field19", "f4"),
+#         ("field20", "f4"),
+#         ("field21", "f4"),
+#         ("field22", "f4"),
+#         ("field23", "i4"),
+#         ("field24", "i4"),
+#         ("field25", "f4"),
+#         ("field26", "f4"),
+#         ("field27", "f4"),
+#     ]
+
+#     # I think this line with the fancy type does not play nice
+#     # with the jit
+#     tri_data = np.zeros(
+#         len(triangles),
+#         dtype=dtype,
+#     )
+
+#     for i, tri in enumerate(triangles):
+#         tri_data[i] = (
+#             *tri.posA, 0.0,
+#             *tri.posB, 0.0,
+#             *tri.posC, 0.0,
+#             *tri.normalA, 0.0,
+#             *tri.normalB, 0.0,
+#             *tri.normalC, tri.mesh_index,
+#             tri.triangle_id, 0.0, 0.0, 0.0,
+#         )
+
+#     return tri_data
+
+
+@jit(nopython=True)
 def triangles_to_array(triangles:list[Triangle]) -> np.ndarray:
     """Writes triangles to an array that can be sent straight to a buffer"""
     pass
-    dtype = [
-        ("field00", "f4"),
-        ("field01", "f4"),
-        ("field02", "f4"),
-        ("field03", "f4"),
-        ("field04", "f4"),
-        ("field05", "f4"),
-        ("field06", "f4"),
-        ("field07", "f4"),
-        ("field08", "f4"),
-        ("field09", "f4"),
-        ("field10", "f4"),
-        ("field11", "f4"),
-        ("field12", "f4"),
-        ("field13", "f4"),
-        ("field14", "f4"),
-        ("field15", "f4"),
-        ("field16", "f4"),
-        ("field17", "f4"),
-        ("field18", "f4"),
-        ("field19", "f4"),
-        ("field20", "f4"),
-        ("field21", "f4"),
-        ("field22", "f4"),
-        ("field23", "i4"),
-        ("field24", "i4"),
-        ("field25", "f4"),
-        ("field26", "f4"),
-        ("field27", "f4"),
-    ]
+    dtype = np.float32
 
     # I think this line with the fancy type does not play nice
     # with the jit
     tri_data = np.zeros(
-        len(triangles),
+        (len(triangles), 28),
         dtype=dtype,
     )
 
+    pass
     for i, tri in enumerate(triangles):
-        tri_data[i] = (
+        tri_data[i, :] = np.array([
             *tri.posA, 0.0,
             *tri.posB, 0.0,
             *tri.posC, 0.0,
             *tri.normalA, 0.0,
             *tri.normalB, 0.0,
-            *tri.normalC, tri.mesh_index,
-            tri.triangle_id, 0.0, 0.0, 0.0,
+            *tri.normalC, np.int32(tri.mesh_index).view(np.float32),
+            np.int32(tri.triangle_id).view(np.float32), 0.0, 0.0, 0.0,
+            ], 
+            dtype=np.float32,
         )
 
     return tri_data
@@ -265,7 +310,7 @@ def triangles_to_array(triangles:list[Triangle]) -> np.ndarray:
 # @staticmethod
 @jit(nopython=True)
 def triangles_from_obj_data(
-    vertex_indices_arr: np.ndarray, vertices: np.ndarray, vertex_normals: np.ndarray
+    vertex_indices_arr: np.ndarray, vertices: np.ndarray, vertex_normals: np.ndarray, mesh_idx:int, triangle_id_start:int
 ) -> list[Triangle]:
     ret = []
     for (i, vertex_indices) in enumerate(vertex_indices_arr):
@@ -279,8 +324,8 @@ def triangles_from_obj_data(
                 n0,
                 n1,
                 n2,
-                0,
-                i,
+                mesh_idx,
+                triangle_id_start + i,
             )
         )
     return ret

@@ -17,25 +17,22 @@ def timer(fn: Callable):
         t_start = time.time()
         ret = fn(*args, **kwargs)
         t_end = time.time()
-        print(f"Function {fn.__qualname__} executed in {(t_end - t_start) * 1e3} ms")
+        print(f"Function {fn.__name__} executed in {(t_end - t_start) * 1e3} ms")
         return ret
 
     return wrapper
 
 
 @jit(nopython=True)
-# @cuda.jit
 def normalize(vec: np.ndarray):
     return vec / np.linalg.norm(vec)
 
 @jit(nopython=True)
-# @cuda.jit
 def normalize_ip(vec: np.ndarray):
     vec /= np.linalg.norm(vec)
 
 
 @jit(nopython=True)
-# @cuda.jit
 def mat33_create_from_quaternion(quat: np.ndarray):
     """Creates a matrix with the same rotation as a quaternion.
 
@@ -93,7 +90,6 @@ def mat44_create_from_quaternion(quat: np.ndarray):
 pyrr.Matrix44.inverse
 
 @jit(nopython=True)
-# @cuda.jit
 def quaternion_create_from_axis_rotation(axis: np.ndarray, theta):
     dtype = axis.dtype
     # make sure the vector is normalized

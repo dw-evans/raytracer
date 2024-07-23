@@ -28,6 +28,8 @@ from numba_scripts.classes import (
     Csys,
 )
 
+from numba_scripts.functions import timer
+
 import pyrr
 from pyrr import (
     Vector3,
@@ -48,12 +50,19 @@ from typing import Generator
 # from scripts.scenes import animated_scene
 from scripts.scenes import numba_test_scene
 
-
+from pathlib import Path
+import datetime
 
 from functools import partial
 
 
 MAX_TRIANGLES_TO_LOAD = 200000
+
+
+def check_for_errors(ctx:moderngl.Context):
+    error = ctx.error
+    if error:
+        print(f"OpenGL Error: {error}")
 
 
 class Application:
@@ -62,7 +71,7 @@ class Application:
         self,
     ) -> None:
         # window params
-        self.DYNAMIC_RENDER_FRAMERATE = 1.0
+        self.DYNAMIC_RENDER_FRAMERATE = 1
         self.WINDOW_HEIGHT = 540 // 2
         self.ASPECT_RATIO = 16 / 9
 
@@ -124,6 +133,15 @@ class Application:
                 height=self.WINDOW_HEIGHT,
             ),
         )
+        self.register_program(
+            RayTracerStatic(
+                app=self,
+                file_fragment_shader="shaders/raytracer.fs.glsl",
+                file_vertex_shader="shaders/raytracer.vs.glsl",
+                width=self.WINDOW_WIDTH,
+                height=self.WINDOW_HEIGHT,
+            ),
+        )
 
         self.is_waiting_to_toggle = False
         self.is_animating = False
@@ -131,6 +149,10 @@ class Application:
         self.dt = 1 / self.DYNAMIC_RENDER_FRAMERATE
         self.reset_anim_key_pressed = False
         self.pause_play_anim_key_pressed = False
+
+        self.display_program = self.programs["raytracer_static"]
+
+
 
     def start(self):
         self.running = True
@@ -317,6 +339,7 @@ class ProgramABC(ABC):
         self.context = moderngl.create_context(
             require=require,
             standalone=standalone,
+            debug=True,
         )
 
         self.initialise()
@@ -412,18 +435,20 @@ class DefaultShaderProgram(ProgramABC):
         triangles = scene.triangles
         n_triangles = len(triangles)
         program["triCount"].write(struct.pack("i", n_triangles))
+        # program["triCount"].write(struct.pack("i", 80000))
 
         program["meshCount"].write(struct.pack("i", len(scene.meshes)))
 
         program["selectedMeshId"].write(struct.pack("i", -1))
 
 
-        triangles = scene.triangles
         print(f"Updating Triangle Positions...")
-        numba_scripts.classes.update_triangles_to_csys(triangles, scene.meshes[0].csys)
+        # numba_scripts.classes.update_triangles_to_csys(triangles, scene.meshes[0].csys)
+        timer(numba_scripts.classes.update_triangles_to_csys)(triangles, scene.meshes[0].csys)
 
         print(f"Loading triangles into SSBO...")
-        triangle_data = numba_scripts.classes.triangles_to_array(triangles)
+        # triangle_data = numba_scripts.classes.triangles_to_array(triangles)
+        triangle_data = timer(numba_scripts.classes.triangles_to_array)(triangles)
         # triangle_data = numba_scripts.classes.many_triangles_to_bytes(triangles)
         triangle_bytes = triangle_data.tobytes()
 
@@ -468,10 +493,9 @@ class DefaultShaderProgram(ProgramABC):
 
         # if MODIFICATION_WAITING:
         #     MODIFY_COMMAND()
-        #     MODIFICATION_WAITING = False
 
         vao.render(mode=moderngl.TRIANGLE_STRIP)
-
+        
         context.gc()
 
     def handle_event(
@@ -634,8 +658,12 @@ class RayTracerDynamic(ProgramABC):
         program["screenHeight"].write(struct.pack("i", self.height))
 
         program["spheresCount"].write(struct.pack("i", len(spheres)))
+        
         sphere_buffer_binding = 1
         program["sphereBuffer"].binding = sphere_buffer_binding
+        sphere_bytes = functions.iter_to_bytes(spheres)
+        sphere_buffer = context.buffer(sphere_bytes)
+        sphere_buffer.bind_to_uniform_block(self.sphere_buffer_binding)
 
         triangles = scene.triangles
         n_triangles = len(triangles)
@@ -643,62 +671,19 @@ class RayTracerDynamic(ProgramABC):
 
         program["meshCount"].write(struct.pack("i", len(scene.meshes)))
 
-        # solution to this being very slow is to vectorise it completely with arrays
-        # store all of the triangle information in an x by 18+ array and add to all
-        # self.triangles_ssbo = context.buffer(
-        #     functions.iter_to_bytes(
-        #         [t.update_pos_with_mesh2() for t in scene.triangles][:100],
-        #     )
-        # )
+        print(f"Updating Triangle Positions...")
+        # numba_scripts.classes.update_triangles_to_csys(triangles, scene.meshes[0].csys)
+        timer(numba_scripts.classes.update_triangles_to_csys)(triangles, scene.meshes[0].csys)
 
-        dtype = [
-            ("field00", "f4"),
-            ("field01", "f4"),
-            ("field02", "f4"),
-            ("field03", "f4"),
-            ("field04", "f4"),
-            ("field05", "f4"),
-            ("field06", "f4"),
-            ("field07", "f4"),
-            ("field08", "f4"),
-            ("field09", "f4"),
-            ("field10", "f4"),
-            ("field11", "f4"),
-            ("field12", "f4"),
-            ("field13", "f4"),
-            ("field14", "f4"),
-            ("field15", "f4"),
-            ("field16", "f4"),
-            ("field17", "f4"),
-            ("field18", "f4"),
-            ("field19", "f4"),
-            ("field20", "f4"),
-            ("field21", "f4"),
-            ("field22", "f4"),
-            ("field23", "i4"),
-            ("field24", "i4"),
-            ("field25", "f4"),
-            ("field26", "f4"),
-            ("field27", "f4"),
-        ]
+        print(f"Loading triangles into SSBO...")
+        # triangle_data = numba_scripts.classes.triangles_to_array(triangles)
+        triangle_data = timer(numba_scripts.classes.triangles_to_array)(triangles)
+        # triangle_data = numba_scripts.classes.many_triangles_to_bytes(triangles)
+        triangle_bytes = triangle_data.tobytes()
 
-        tri_data = np.zeros(
-            min(scene.count_triangles(), MAX_TRIANGLES_TO_LOAD),
-            dtype=dtype,
-        )
+        print(f"Loading triangles complete.")
 
-        for i, tri in enumerate(triangles[0:MAX_TRIANGLES_TO_LOAD]):
-            tri_data[i] = (
-                *tri.posA, 0.0,
-                *tri.posB, 0.0,
-                *tri.posC, 0.0,
-                *tri.normalA, 0.0,
-                *tri.normalB, 0.0,
-                *tri.normalC, tri.parent.mesh_index,
-                tri.triangle_id, 0.0, 0.0, 0.0,
-            )
-
-        self.triangles_ssbo = context.buffer(tri_data.tobytes())
+        self.triangles_ssbo = context.buffer(triangle_bytes)
         triangles_ssbo_binding = 9
         self.triangles_ssbo.bind_to_storage_buffer(binding=triangles_ssbo_binding)
 
@@ -735,12 +720,6 @@ class RayTracerDynamic(ProgramABC):
         # scene.meshes[0].csys.pos.z = 0.0 + 5.0 * sin(time / 2)
         # scene.spheres[-2].pos.x = 2 + 1.0 * sin(time)
 
-        self.triangles_ssbo.write(
-            functions.iter_to_bytes(
-                [t.update_pos_with_mesh2() for t in scene.triangles],
-            )
-        )
-
         program["frameNumber"].write(struct.pack("I", self.cycle_counter))
         CAM_DEPTH_OF_FIELD_STRENGTH = 0.000
         program["depthOfFieldStrength"].write(
@@ -755,9 +734,6 @@ class RayTracerDynamic(ProgramABC):
         program["CamLocalToWorldMatrix"].write(cam.local_to_world_matrix.astype("f4"))
         program["CamGlobalPos"].write(cam.csys.pos.astype("f4"))
 
-        sphere_bytes = functions.iter_to_bytes(spheres)
-        sphere_buffer = context.buffer(sphere_bytes)
-        sphere_buffer.bind_to_uniform_block(self.sphere_buffer_binding)
 
         self.texture.use(location=1)
 
@@ -909,29 +885,21 @@ class RayTracerDynamic(ProgramABC):
 
                 pass
 
-
 class RayTracerStatic(ProgramABC):
-    MAX_RAY_BOUNCES = 4
-    RAYS_PER_PIXEL = 12
-    HIGHLIGHT_MATERIAL = Material(
-        Vector4((0.3, 0.6, 0.8, 1.0), dtype="f4"),
-        Vector3((0, 0, 0), dtype="f4"),
-        0.0,
-        smoothness=0.5,
-    )
-    KEYBOARD_ENABLED = True
-    MOUSE_ENABLED = True
+    name = "raytracer_static"
 
     def __init__(
         self,
+        app: Application,
         file_vertex_shader: str,
         file_fragment_shader: str,
         width: int,
         height: int,
-        standalone=True,
+        standalone=False,
         require=460,
     ) -> None:
         super().__init__(
+            app,
             file_vertex_shader,
             file_fragment_shader,
             width,
@@ -939,59 +907,151 @@ class RayTracerStatic(ProgramABC):
             standalone,
             require,
         )
+        self.MAX_RAY_BOUNCES = 32
+        self.RAYS_PER_PIXEL = 1
+
+        self.sphere_buffer_binding = 1
+        self.is_scene_static = True
 
     def configure_program(self, scene: Scene):
-        prog = self.program
-        ctx = self.context
+
+        program = self.program
         spheres = scene.spheres
+        context = self.context
 
-        prog["STATIC_RENDER"].write(struct.pack("i", True))
-        prog["MAX_BOUNCES"].write(struct.pack("i", self.MAX_RAY_BOUNCES))
-        prog["RAYS_PER_PIXEL"].write(struct.pack("i", self.RAYS_PER_PIXEL))
+        self.texture = self.context.texture((self.width, self.height), 3)
+        self.texture.use(location=1)
+        self.program["previousFrame"] = 1
 
-        texture = ctx.texture((self.width, self.height), 3)
+        self.frame_counter = 0
+        self.cycle_counter = 0
+        self.shader_rng_counter = 0
+        self.target_dir = Path() / "renders" / f"{datetime.datetime.now().strftime("%Y.%m.%d_%H%M%S")}"
+        self.target_dir.mkdir(parents=True)
+
+        program["STATIC_RENDER"].write(struct.pack("i", True))
+        program["MAX_BOUNCES"].write(struct.pack("i", self.MAX_RAY_BOUNCES))
+        program["RAYS_PER_PIXEL"].write(struct.pack("i", self.RAYS_PER_PIXEL))
+        # program["RAYS_PER_PIXEL"].write(struct.pack("i", 1))
+
+        texture = context.texture((self.width, self.height), 3)
         texture.use(location=1)
-        prog["previousFrame"] = 1
+        program["previousFrame"] = 1
 
         # initialise the uniforms
-        prog["screenWidth"].write(struct.pack("i", self.width))
-        prog["screenHeight"].write(struct.pack("i", self.height))
+        program["screenWidth"].write(struct.pack("i", self.width))
+        program["screenHeight"].write(struct.pack("i", self.height))
 
-        prog["spheresCount"].write(struct.pack("i", len(spheres)))
+        program["spheresCount"].write(struct.pack("i", len(spheres)))
+        
         sphere_buffer_binding = 1
-        prog["sphereBuffer"].binding = sphere_buffer_binding
+        program["sphereBuffer"].binding = sphere_buffer_binding
+        sphere_bytes = functions.iter_to_bytes(spheres)
+        sphere_buffer = context.buffer(sphere_bytes)
+        sphere_buffer.bind_to_uniform_block(self.sphere_buffer_binding)
 
         triangles = scene.triangles
         n_triangles = len(triangles)
-        prog["triCount"].write(struct.pack("i", n_triangles))
+        program["triCount"].write(struct.pack("i", n_triangles))
 
-        prog["meshCount"].write(struct.pack("i", len(scene.meshes)))
+        program["meshCount"].write(struct.pack("i", len(scene.meshes)))
 
-        triangles_ssbo = ctx.buffer(
-            functions.iter_to_bytes(
-                [t.update_pos_with_mesh2() for t in scene.triangles],
-            )
-        )
+        print(f"Updating Triangle Positions...")
+        # numba_scripts.classes.update_triangles_to_csys(triangles, scene.meshes[0].csys)
+        timer(numba_scripts.classes.update_triangles_to_csys)(triangles, scene.meshes[0].csys)
+
+        print(f"Loading triangles into SSBO...")
+        # triangle_data = numba_scripts.classes.triangles_to_array(triangles)
+        triangle_data = timer(numba_scripts.classes.triangles_to_array)(triangles)
+        # triangle_data = numba_scripts.classes.many_triangles_to_bytes(triangles)
+        triangle_bytes = triangle_data.tobytes()
+
+        print(f"Loading triangles complete.")
+
+        self.triangles_ssbo = context.buffer(triangle_bytes)
         triangles_ssbo_binding = 9
-        triangles_ssbo.bind_to_storage_buffer(binding=triangles_ssbo_binding)
-        # program["triBuffer"].binding = triangles_ssbo_binding
+        self.triangles_ssbo.bind_to_storage_buffer(binding=triangles_ssbo_binding)
 
-        mesh_buffer = ctx.buffer(functions.iter_to_bytes(scene.meshes))
+        mesh_buffer = context.buffer(functions.iter_to_bytes(scene.meshes))
         mesh_buffer_binding = 10
-        prog["meshBuffer"].binding = mesh_buffer_binding
+        program["meshBuffer"].binding = mesh_buffer_binding
         mesh_buffer.bind_to_uniform_block(mesh_buffer_binding)
 
-        sky_color = Vector3((131, 200, 228), dtype="f4") / 255
+        # sky_color = Vector3((131, 200, 228), dtype="f4") / 255
+        # program["skyColor"].write(struct.pack("3f", *sky_color))
 
-        prog["skyColor"].write(struct.pack("3f", *sky_color))
-
-        material_buffer = ctx.buffer(functions.iter_to_bytes([self.HIGHLIGHT_MATERIAL]))
+        material_buffer = context.buffer(
+            self.app.display_scene.atmosphere_material.tobytes()
+        )
         material_buffer_binding = 11
-        prog["materialBuffer"].binding = material_buffer_binding
+        program["materialBuffer"].binding = material_buffer_binding
         material_buffer.bind_to_uniform_block(material_buffer_binding)
 
-    def calculate_frame(self):
-        return super().calculate_frame()
+
+    def calculate_frame(self, scene: Scene):
+
+
+        vao = self.vao
+        program = self.program
+        context = self.context
+        cam = scene.cam
+
+        spheres = scene.spheres
+
+        self.program["MAX_BOUNCES"].write(struct.pack("i", self.MAX_RAY_BOUNCES))
+
+        # self.is_scene_static = False
+        # time = pygame.time.get_ticks() / np.float32(1000.0)
+        # scene.meshes[0].csys.pos.z = 0.0 + 5.0 * sin(time / 2)
+        # scene.spheres[-2].pos.x = 2 + 1.0 * sin(time)
+
+        program["frameNumber"].write(struct.pack("I", self.cycle_counter))
+        CAM_DEPTH_OF_FIELD_STRENGTH = 0.000
+        program["depthOfFieldStrength"].write(
+            struct.pack("f", CAM_DEPTH_OF_FIELD_STRENGTH),
+        )
+        CAM_ANTIALIAS_STRENGTH = 0.000001
+        program["depthOfFieldStrength"].write(
+            struct.pack("f", CAM_ANTIALIAS_STRENGTH),
+        )
+
+        program["ViewParams"].write(cam.view_params.astype("f4"))
+        program["CamLocalToWorldMatrix"].write(cam.local_to_world_matrix.astype("f4"))
+        program["CamGlobalPos"].write(cam.csys.pos.astype("f4"))
+
+        self.texture.use(location=1)
+
+        vao.render(mode=moderngl.TRIANGLE_STRIP)
+
+        render_data = context.screen.read(components=3, dtype="f1")
+        self.texture.write(render_data)
+
+        # if self.is_scene_static:
+        #     self.cycle_counter += 1
+        # else:
+        #     self.is_scene_static = True
+        #     self.cycle_counter = 0
+        buffer = context.screen.read(components=3, dtype="f1")
+        size = (self.width, self.height)
+        # img = functions.buffer_to_image(render_data, (self.width, self.height))
+        img = functions.buffer_to_image(buffer, size)
+
+        img.save(self.target_dir / f"{self.cycle_counter:05}.png")
+
+        if self.cycle_counter == 60:
+            self.app.end()
+        
+        self.shader_rng_counter += 1
+        self.cycle_counter += 1
+
+
+
+        self.context.gc()
+
+    def handle_event(self, event, app: Application, cam: Camera, scene: Scene, keyboard_enabled: bool, mouse_enabled: bool):
+        pass
+
+
 
 
 def generic_camera_event_handler(
@@ -1094,3 +1154,6 @@ def generic_camera_event_handler(
                 cam.csys.ryg(dyaw)
                 cam.csys.rxp(dpitch)
                 pass
+
+
+pass
