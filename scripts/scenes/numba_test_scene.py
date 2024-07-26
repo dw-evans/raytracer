@@ -34,7 +34,7 @@ material_plain_2 = Material(
     smoothness=0.6,
 )
 material_plain_3 = Material(
-    Vector4((0.5, 0.0, 1.0, 1.0), dtype="f4"),
+    Vector4((0.2, 0.0, 0.4, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
     0.0,
     smoothness=0.0,
@@ -203,31 +203,65 @@ light_material_1 = Material(
     Vector4([1., 0.327, 0.0, 1.0]),
     transmission = 0.8,
     smoothness=1.0,
-    ior = 1.5,
+    ior = 1.1,
 )
 light_material_2 = Material(
     Vector4([1., 0.0, 0.0, 1.0]),
     transmission = 0.8,
     smoothness=1.0,
-    ior = 1.5,
+    ior = 1.1,
+)
+
+internal_light_material = Material(
+    Vector4([0.0, 0.0, 0.0, 1.0]),
+    emissionColor=Vector3([1., 1., 1.]),
+    emissionStrength=5.0
+)
+
+internal_plastic_material = Material(
+    Vector4([0.3, 0.3, 0.3, 1.0]),
+    smoothness = 0.5,
+)
+
+internal_white_material = Material(
+    Vector4([0.1, 0.1, 0.1, 1.0]),
+    smoothness = 0.5,
+)
+
+seatbelt_material = Material(
+    Vector4([0.15, 0.15, 0.15, 1.0]),
+    smoothness = 0.5,
 )
 
 meshes = []
 
 load_data = [
-    ("objects/car/black.obj", glass_material),
-    ("objects/car/body1.obj", body_material),
-    ("objects/car/chrome.obj", chrome_material),
+    # ("objects/car/black.obj", glass_material),
+    # ("objects/car/body1.obj", body_material),
+    # ("objects/car/chrome.obj", chrome_material),
     ("objects/car/glass1.obj", glass_material),
+    # ("objects/car/internal_light.obj", internal_light_material),
+    # ("objects/car/internal_plastic.obj", internal_plastic_material),
+    # ("objects/car/internal_white.obj", internal_white_material),
     # ("objects/car/lights_rear_bottom.obj", light_material_1),
     # ("objects/car/lights_rear_top.obj", light_material_2),
-    ("objects/car/roof_fabric.obj", roof_material),
-    ("objects/car/rubber.obj", rubber_material),
-    ("objects/car/wheels.obj", hubcap_material),
+    # ("objects/car/roof_fabric.obj", roof_material),
+    # ("objects/car/rubber.obj", rubber_material),
+    # ("objects/car/seatbelts.obj", seatbelt_material),
+    # ("objects/car/wheels.obj", hubcap_material),
+
+    # ("objects/car/cube_test.obj", glass_material),
+    # ("objects/car/cube_test_2.obj", glass_material),
+    # ("objects/car/cube_test_3.obj", glass_material),
+    # ("objects/smooth_disc.obj", glass_material),
+
+    ("objects/car/glass_test2.obj", glass_material),
+    ("objects/car/glass_test3.obj", glass_material),
 ]
+# ]
 
 car_csys = numba_scripts.classes.Csys()
-car_csys.pos = np.array([0.0, -1.0, 5.0], dtype=np.float32)
+car_csys.pos = np.array([0.0, -1.0, 4.0], dtype=np.float32)
 car_csys.ryg(180-45)
 
 for (i, (f, material)) in enumerate(load_data):
@@ -236,7 +270,7 @@ for (i, (f, material)) in enumerate(load_data):
     vertex_indices_arr = msh.faces.astype(np.int32)
     vertices = msh.vertices.astype(np.float32)
     vertex_normals = msh.vertex_normals.astype(np.float32)
-
+    
     triangle_count_start = scene.count_triangles() 
     mesh_idx = i
     triangles = numba_scripts.classes.triangles_from_obj_data(
@@ -257,10 +291,10 @@ for (i, (f, material)) in enumerate(load_data):
 
 print(f"There are `{scene.count_triangles()}` triangles in the scene.")
 
-from ..animate import Animation
-from math import sin, cos, tan, pi
+# from ..animate import Animation
+# from math import sin, cos, tan, pi
 
-import numba_scripts.classes
+# import numba_scripts.classes
 # def mesh_csys_animate(obj: numba_scripts.classes.Csys, t):
 #     obj.pos[0] = 0.0 + 10.0 * sin(t / 2)
 #     obj.pos[1] = -0.5

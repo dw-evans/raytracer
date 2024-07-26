@@ -39,9 +39,11 @@ from pyrr import (
     Quaternion,
 )
 
+
 import numpy as np
 
 import threading
+import time
 
 import sys
 from typing import Generator
@@ -54,7 +56,13 @@ from pathlib import Path
 import datetime
 
 from functools import partial
+import threading
 
+import importlib
+
+
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
 MAX_TRIANGLES_TO_LOAD = 200000
 
@@ -71,8 +79,8 @@ class Application:
         self,
     ) -> None:
         # window params
-        self.DYNAMIC_RENDER_FRAMERATE = 1
-        self.WINDOW_HEIGHT = 540 // 2
+        self.DYNAMIC_RENDER_FRAMERATE = 24
+        self.WINDOW_HEIGHT = 1080 // 2
         self.ASPECT_RATIO = 16 / 9
 
         # mouse / keyboard movement camera speeds
@@ -124,6 +132,9 @@ class Application:
                 height=self.WINDOW_HEIGHT,
             ),
         )
+        # Something can generate a memory leak here
+        # It literally happens if I change anything in the main function
+        # wtf...
         self.register_program(
             RayTracerDynamic(
                 app=self,
@@ -133,15 +144,15 @@ class Application:
                 height=self.WINDOW_HEIGHT,
             ),
         )
-        self.register_program(
-            RayTracerStatic(
-                app=self,
-                file_fragment_shader="shaders/raytracer.fs.glsl",
-                file_vertex_shader="shaders/raytracer.vs.glsl",
-                width=self.WINDOW_WIDTH,
-                height=self.WINDOW_HEIGHT,
-            ),
-        )
+        # self.register_program(
+        #     RayTracerStatic(
+        #         app=self,
+        #         file_fragment_shader="shaders/raytracer.fs.glsl",
+        #         file_vertex_shader="shaders/raytracer.vs.glsl",
+        #         width=self.WINDOW_WIDTH,
+        #         height=self.WINDOW_HEIGHT,
+        #     ),
+        # )
 
         self.is_waiting_to_toggle = False
         self.is_animating = False
@@ -150,8 +161,12 @@ class Application:
         self.reset_anim_key_pressed = False
         self.pause_play_anim_key_pressed = False
 
-        self.display_program = self.programs["raytracer_static"]
+        # self.display_program = self.programs["raytracer_static"]
 
+        self.watchdog:threading.Thread = threading.Thread(target=self.run_file_watchdog)
+        self.watchdog_command:callable = lambda: None
+        self.watchdog_command_waiting = False
+        self.watchdog_is_running = False
 
 
     def start(self):
@@ -186,6 +201,7 @@ class Application:
         return 1 / self.DYNAMIC_RENDER_FRAMERATE * self.CAMERA_ROLL_SPEED
 
     def register_program(self, program: ProgramABC):
+
         if not program in self.programs.keys():
             self.programs[program.name] = program
         else:
@@ -207,9 +223,21 @@ class Application:
             self.display_program = self.programs["default"]
 
     def run(self):
+        print("Running application loop...")
         # configure the program and then run it
+        if not self.watchdog_is_running:
+            self.watchdog.start()
+            self.watchdog_is_running = True
+
         self.display_program.configure_program(self.display_scene)
+
         while self.running:
+
+            if self.watchdog_command_waiting:
+                self.watchdog_command_waiting = False
+                self.watchdog_command.__call__()
+                pass
+
 
             options = {
                 "app": self,
@@ -275,6 +303,54 @@ class Application:
             self.display_program.calculate_frame(self.display_scene)
             pygame.display.flip()
             self.clock.tick(self.DYNAMIC_RENDER_FRAMERATE)
+
+        self.watchdog.join()
+
+
+    class ShaderHandler(FileSystemEventHandler):
+        def __init__(self, app:Application):
+            self.app = app
+            
+        def on_modified(self, event):
+            # This method is called when a file is modified
+            if not self.app.watchdog_command_waiting and not event.is_directory:
+                print(f'File modified: {event.src_path}, reloading shaders')
+                self.out_fn_waiting = True
+                # func = lambda: self.app.run()
+
+                def out_fn():
+                    print("File Modification occurred, reloading shaders...")
+                    try:
+                        self.app.display_program.initialise()
+                        print("Shaders reloaded.")
+                    except Exception as e:
+                        print(f"Error during shader reloading. Check for errors: \n\n{e}\n")
+                    self.app.display_program.configure_program(scene=self.app.display_scene)
+                    print("Reloading Scene")
+                    importlib.reload(numba_test_scene)
+                    self.app.display_scene = numba_test_scene.scene
+                    print("Scene reloaded")
+                    print("Re-running application loop.")
+                    self.app.run()
+
+                self.app.watchdog_command = out_fn
+                self.app.watchdog_command_waiting = True
+
+    def run_file_watchdog(self):
+        event_handler = self.ShaderHandler(app=self)
+        observer = Observer()
+        path = "shaders"
+        observer.schedule(event_handler, path, recursive=False)
+        observer.start()
+        print(f'Started watching {path} for modifications.')
+
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            observer.stop()
+        observer.join()
+
 
 
 class ProgramABC(ABC):
@@ -347,10 +423,13 @@ class ProgramABC(ABC):
     def initialise(self):
         self.reload_shaders()
 
+        pass
+        # memory leak happens here with the raytracer 
         self.program = self.context.program(
             vertex_shader=self.vertex_shader,
             fragment_shader=self.fragment_shader,
         )
+
         self.vbo = self.context.buffer(self.vertices.tobytes())
         self.vao = self.context.vertex_array(
             self.program, [(self.vbo, "3f", "position")]
@@ -365,6 +444,8 @@ class ProgramABC(ABC):
                 ],
             )
 
+        # self.program.release()
+
     def load_shaders(
         self,
         file_fragment_shader: str,
@@ -376,7 +457,7 @@ class ProgramABC(ABC):
             self.vertex_shader = f.read()
 
     def reload_shaders(self):
-        return self.load_shaders(
+        self.load_shaders(
             file_fragment_shader=self.file_fragment_shader,
             file_vertex_shader=self.file_vertex_shader,
         )
@@ -644,7 +725,8 @@ class RayTracerDynamic(ProgramABC):
         self.cycle_counter = 0
         self.shader_rng_counter = 0
 
-        program["STATIC_RENDER"].write(struct.pack("i", True))
+        # program["STATIC_RENDER"].write(struct.pack("i", True))
+        program["STATIC_RENDER"].write(struct.pack("i", False))
         program["MAX_BOUNCES"].write(struct.pack("i", self.MAX_RAY_BOUNCES))
         program["RAYS_PER_PIXEL"].write(struct.pack("i", self.RAYS_PER_PIXEL))
         # program["RAYS_PER_PIXEL"].write(struct.pack("i", 1))
@@ -705,6 +787,7 @@ class RayTracerDynamic(ProgramABC):
         program
 
     def calculate_frame(self, scene: Scene):
+
 
         vao = self.vao
         program = self.program
@@ -907,7 +990,7 @@ class RayTracerStatic(ProgramABC):
             standalone,
             require,
         )
-        self.MAX_RAY_BOUNCES = 32
+        self.MAX_RAY_BOUNCES = 8
         self.RAYS_PER_PIXEL = 1
 
         self.sphere_buffer_binding = 1

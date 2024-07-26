@@ -85,6 +85,8 @@ def rayTriangle(
 
     # Refer to the shader code for details
 
+    return HitInfo()
+
     hitInfo = HitInfo()
 
     v0 = tri.posA

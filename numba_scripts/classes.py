@@ -209,14 +209,14 @@ class Triangle:
 #         )
 #         return bytes_data
     
-# @jit(nopython=True)
+# @jit(nopython=True, cache=True)
 # def many_triangles_to_bytes(triangles:list[Triangle]):
 #     ret = b""
 #     for i, triangle in enumerate(triangles):
 #         ret += triangle.tobytes()
 
 
-@jit(nopython=True)
+@jit(nopython=True, cache=True)
 def update_triangles_to_csys(triangles:list[Triangle], csys:Csys):
     for i, triangle in enumerate(triangles):
         triangle.update_pos_to_csys(csys)
@@ -277,7 +277,7 @@ def update_triangles_to_csys(triangles:list[Triangle], csys:Csys):
 #     return tri_data
 
 
-@jit(nopython=True)
+@jit(nopython=True, cache=True)
 def triangles_to_array(triangles:list[Triangle]) -> np.ndarray:
     """Writes triangles to an array that can be sent straight to a buffer"""
     pass
@@ -307,10 +307,9 @@ def triangles_to_array(triangles:list[Triangle]) -> np.ndarray:
     return tri_data
 
 
-# @staticmethod
-@jit(nopython=True)
+@jit(nopython=True, cache=True)
 def triangles_from_obj_data(
-    vertex_indices_arr: np.ndarray, vertices: np.ndarray, vertex_normals: np.ndarray, mesh_idx:int, triangle_id_start:int
+    vertex_indices_arr: np.ndarray, vertices: np.ndarray, vertex_normals: np.ndarray, mesh_idx:int, triangle_id_start:int,
 ) -> list[Triangle]:
     ret = []
     for (i, vertex_indices) in enumerate(vertex_indices_arr):

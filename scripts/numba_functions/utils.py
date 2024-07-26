@@ -25,13 +25,13 @@ def timer(fn: Callable):
     return wrapper
 
 
-@jit(nopython=True)
+@jit(nopython=True, cache=True)
 # @cuda.jit
 def normalize(vec: np.ndarray):
     return vec / np.linalg.norm(vec)
 
 
-@jit(nopython=True)
+@jit(nopython=True, cache=True)
 # @cuda.jit
 def mat33_create_from_quaternion(quat: np.ndarray):
     """Creates a matrix with the same rotation as a quaternion.
@@ -81,7 +81,7 @@ def mat33_create_from_quaternion(quat: np.ndarray):
         dtype=quat.dtype,
     )
 
-@jit(nopython=True)
+@jit(nopython=True, cache=True)
 def mat44_create_from_quaternion(quat: np.ndarray):
     dtype = quat.dtype
     ret = np.eye(4, 4)
@@ -90,7 +90,7 @@ def mat44_create_from_quaternion(quat: np.ndarray):
 
 pyrr.Matrix44.inverse
 
-@jit(nopython=True)
+@jit(nopython=True, cache=True)
 # @cuda.jit
 def quaternion_create_from_axis_rotation(axis: np.ndarray, theta):
     dtype = axis.dtype
@@ -191,7 +191,7 @@ def obj_import_testing():
 
 
     @timer
-    @jit(nopython=True)
+    @jit(nopython=True, cache=True)
     def from_obj_optimized(
         vertex_indices_arr: np.ndarray, vertices: np.ndarray, vertex_normals: np.ndarray
     ):
@@ -229,7 +229,7 @@ def obj_import_testing():
 def csys_comparison_testing():
     COUNT = 1_000_000
     @timer
-    @jit(nopython=True)
+    @jit(nopython=True, cache=True)
     def operate_on_csys1(csys:NumbaCsys, count=1):
         x = np.zeros(4)
         for i in COUNT:

@@ -23,16 +23,16 @@ def timer(fn: Callable):
     return wrapper
 
 
-@jit(nopython=True)
+@jit(nopython=True, cache=True)
 def normalize(vec: np.ndarray):
     return vec / np.linalg.norm(vec)
 
-@jit(nopython=True)
+@jit(nopython=True, cache=True)
 def normalize_ip(vec: np.ndarray):
     vec /= np.linalg.norm(vec)
 
 
-@jit(nopython=True)
+@jit(nopython=True, cache=True)
 def mat33_create_from_quaternion(quat: np.ndarray):
     """Creates a matrix with the same rotation as a quaternion.
 
@@ -81,7 +81,7 @@ def mat33_create_from_quaternion(quat: np.ndarray):
         dtype=dtype,
     )
 
-@jit(nopython=True)
+@jit(nopython=True, cache=True)
 def mat44_create_from_quaternion(quat: np.ndarray):
     ret = np.eye(4, 4)
     ret[0:3, 0:3] = mat33_create_from_quaternion(quat=quat)
@@ -89,7 +89,7 @@ def mat44_create_from_quaternion(quat: np.ndarray):
 
 pyrr.Matrix44.inverse
 
-@jit(nopython=True)
+@jit(nopython=True, cache=True)
 def quaternion_create_from_axis_rotation(axis: np.ndarray, theta):
     dtype = axis.dtype
     # make sure the vector is normalized
@@ -109,7 +109,7 @@ def quaternion_create_from_axis_rotation(axis: np.ndarray, theta):
         dtype=dtype,
     )
 
-@jit(nopython=True)
+@jit(nopython=True, cache=True)
 def multiply_quaternions(q1:np.ndarray, q2:np.ndarray):
 
     q1x, q1y, q1z, q1w = q1
@@ -167,7 +167,7 @@ def obj_import_testing():
 
 
     @timer
-    @jit(nopython=True)
+    @jit(nopython=True, cache=True)
     def from_obj_optimized(
         vertex_indices_arr: np.ndarray, vertices: np.ndarray, vertex_normals: np.ndarray
     ):
@@ -207,7 +207,7 @@ def csys_comparison_testing():
     from classes import Csys
     from scripts.classes import Csys as OldCsys
     @timer
-    @jit(nopython=True)
+    @jit(nopython=True, cache=True)
     def operate_on_csys1(csys:"Csys", x:np.ndarray, count=1):
         for i in range(count):
             x += csys.transformation_matrix
@@ -283,7 +283,7 @@ def update_mesh_pos_testing():
     # simulated_csys.rxg(15)
 
     @timer
-    @jit(nopython=True)
+    @jit(nopython=True, cache=True)
     def update_triangles_new(triangles:list[Triangle], csys:Csys):
         for i, triangle in enumerate(triangles):
             triangle.update_pos_to_csys(csys)

@@ -52,16 +52,6 @@ struct Material
     float ior; // 4 + 4x
 };
 
-// uniform Material highlightMaterial;#
-
-
-
-// layout(std140) uniform materialBuffer
-// {
-//     Material highlightMaterials[4];
-// };
-
-
 
 layout(std140) uniform materialBuffer
 {
@@ -101,7 +91,8 @@ struct Triangle
 
 layout(std140, binding=9) buffer triBuffer
 {
-    Triangle triangles[TRIANGLES_COUNT_MAX];
+    // Triangle triangles[TRIANGLES_COUNT_MAX];
+    Triangle triangles[];
 };
 
 Triangle getTriangle(int index)
@@ -493,7 +484,7 @@ float angleBetweenVectors(vec3 v1, vec3 v2) {
 }
 
 
-vec3 traceRay(Ray ray, inout uint rngState)
+vec3 traceRay(inout Ray ray, inout uint rngState)
 {
     vec3 incomingLight = vec3(0.0, 0.0, 0.0);
     vec3 rayColor = vec3(1.0,1.0,1.0);
@@ -506,9 +497,11 @@ vec3 traceRay(Ray ray, inout uint rngState)
 
     for (int i = 0; i <= MAX_BOUNCES; i++)
     {
+        // if (i == 0) { break; }
         HitInfo hitInfo = calculateRayCollision(ray, rngState);
         if (hitInfo.didHit)
         {
+
             // vec3 diffuseDir = normalize(hitInfo.normal + randomDirection(rngState));
             // vec3 specularDir = reflect(ray.dir, hitInfo.normal);
 
@@ -521,6 +514,8 @@ vec3 traceRay(Ray ray, inout uint rngState)
                 if (randomValue(rngState) > hitInfo.material.color.w)
                 {
                     // move the ray origin to its hit point but dont modify direction
+                    if (i == MAX_BOUNCES) { break; }
+                    
                     ray.origin = hitInfo.hitPoint;
                     ray.prevHit = hitInfo;
                     continue;
@@ -604,6 +599,8 @@ vec3 traceRay(Ray ray, inout uint rngState)
             }
 
             // move the ray origin to its hit point
+            if (i == MAX_BOUNCES) { break; }
+
             ray.origin = hitInfo.hitPoint;
             ray.dir = mix(diffuseDir, specularDir, material.smoothness);
             ray.prevHit = hitInfo;
@@ -671,6 +668,12 @@ void main()
 
         totalIncomingLight += traceRay(newRay, rngState);
         // totalIncomingLight += traceRay(ray, rngState);
+
+        float weight = 0.1;
+        if (i == (RAYS_PER_PIXEL - 1))
+        {
+            totalIncomingLight = totalIncomingLight * (1-weight) + weight * newRay.dir;
+        }
     }
 
     totalIncomingLight /= RAYS_PER_PIXEL;
@@ -694,7 +697,7 @@ void main()
     }
     else 
     {
-        color = vec4(normalize(totalIncomingLight), 1.0)
+        color = vec4(totalIncomingLight, 1.0)
         ;
     }
 

@@ -445,6 +445,8 @@ void main()
 
     vec3 totalIncomingLight = traceRay(ray);
 
+    // adding in a comment
+
     color = vec4(totalIncomingLight, 1.0)
     ;
     
