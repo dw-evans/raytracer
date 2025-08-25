@@ -50,7 +50,10 @@ from typing import Generator
 
 # from scripts.scenes import basic_scene
 # from scripts.scenes import animated_scene
-from scripts.scenes import numba_test_scene
+# from scripts.scenes import numba_test_scene
+from scripts.scenes import final_scene_numba
+
+scn = final_scene_numba
 
 from pathlib import Path
 import datetime
@@ -65,7 +68,6 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
 MAX_TRIANGLES_TO_LOAD = 200000
-
 
 def check_for_errors(ctx:moderngl.Context):
     error = ctx.error
@@ -117,7 +119,7 @@ class Application:
         # self.display_scene = basic_scene.scene3
         # self.display_scene = basic_scene.scene
         # self.display_scene = animated_scene.scene
-        self.display_scene = numba_test_scene.scene
+        self.display_scene = scn.scene
 
         self.display_scene.validate_mesh_indices()
 
@@ -327,8 +329,8 @@ class Application:
                         print(f"Error during shader reloading. Check for errors: \n\n{e}\n")
                     self.app.display_program.configure_program(scene=self.app.display_scene)
                     print("Reloading Scene")
-                    importlib.reload(numba_test_scene)
-                    self.app.display_scene = numba_test_scene.scene
+                    importlib.reload(scn)
+                    self.app.display_scene = scn.scene
                     print("Scene reloaded")
                     print("Re-running application loop.")
                     self.app.run()
