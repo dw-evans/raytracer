@@ -50,6 +50,7 @@ struct Material
     float smoothness; // 4
     float transmission; // 4
     float ior; // 4 + 4x
+    bool transparentFromBehind;
 };
 
 
@@ -154,7 +155,8 @@ HitInfo defaultHitInfo() {
         0.0,
         0.0,
         0.0,
-        0.0
+        0.0,
+        false
     );
     hitInfo.facetId = -1;
     hitInfo.hitBackside = false;
@@ -198,7 +200,7 @@ vec3 getEnvironmentLight(Ray ray)
     return skyColor;
 }
 
-HitInfo rayTriangle(Ray ray, Triangle tri)
+HitInfo rayTriangle(Ray ray, Triangle tri, bool hitBehind)
 {
     HitInfo hitInfo = defaultHitInfo();
 
@@ -225,11 +227,11 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
     }
 
     // if this dot product is positive, the ray is entering through the back
-    // if (NDotRayDirection > 0.0)
-    // {
-    //     hitInfo.didHit = false;
-    //     return hitInfo;
-    // }
+    if ((NDotRayDirection > 0.0) && (!hitBehind))
+    {
+        hitInfo.didHit = false;
+        return hitInfo;
+    }
 
     // set the flag if it hits the back of a facet
     if (NDotRayDirection > 0.0)
@@ -237,11 +239,17 @@ HitInfo rayTriangle(Ray ray, Triangle tri)
         hitInfo.hitBackside = true;
     }
 
-    // solve plane equation and ignore triangles behind the orig
+    // solves plane equation and ignore triangles behind the orig
     float d = -dot(N, v0);
     float t = -(dot(N, orig) + d) / NDotRayDirection;
 
     if (t < 0.0)
+    {
+        hitInfo.didHit = false;
+        return hitInfo;
+    }
+
+    if (t < 1e-6)
     {
         hitInfo.didHit = false;
         return hitInfo;
@@ -348,6 +356,21 @@ float randomValue(inout uint state)
     return state / 4294967295.0;
 }
 
+// uint hash(uint x) {
+//     x ^= x >> 16;
+//     x *= 0x7feb352dU;
+//     x ^= x >> 15;
+//     x *= 0x846ca68bU;
+//     x ^= x >> 16;
+//     return x;
+// }
+
+// float randomValue(inout uint state) {
+//     state = hash(state);
+//     return float(state) / float(0xffffffffU);
+// }
+
+
 vec3 randomDirection(inout uint rngState) 
 {
     // calculates a random vector in a sphere
@@ -429,10 +452,11 @@ HitInfo calculateRayCollision(Ray ray, inout uint rngState)
             }
         }
 
-
+        bool hitBehind = !meshes[tri.meshIndex].material.transparentFromBehind;
         HitInfo hitInfo = rayTriangle(
             ray,
-            tri
+            tri,
+            hitBehind
         );
 
         if ((hitInfo.didHit) && (hitInfo.dst < closestHit.dst))
@@ -494,7 +518,6 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
     vec3 emittedLight;
     Material material;
 
-
     for (int i = 0; i <= MAX_BOUNCES; i++)
     {
         // if (i == 0) { break; }
@@ -538,6 +561,8 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
                 float eta = n1 / n2;
 
                 // technically there is a -1 * -1, I think? 
+
+
                 specularDir = refract(ray.dir, normalFlip * hitInfo.normal, eta);
                 // specularDir = refract(ray.dir, -1 * hitInfo.normal, eta);
 
@@ -576,7 +601,7 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
                             // exiting the material
                             rayColor *= vec3(1.0);
                         } else
-                        {
+                        { 
                             // entering the material
                             rayColor *= material.color.xyz;
                         }
@@ -588,7 +613,7 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
                         diffuseDir = normalize(normalFlip * hitInfo.normal + randomDirection(rngState));
                         rayColor *= material.color.xyz;
                     }
-                }
+                 }
 
             } else
             {
@@ -633,8 +658,11 @@ void main()
 
     uint numPixels = screenWidth * screenHeight;
     vec4 pxCoord = gl_FragCoord;
-    uint pxId = uint(pxCoord.x * screenWidth * screenHeight) + uint(pxCoord.y * screenHeight);
-    uint rngState = pxId + frameNumber;
+    // uint pxId = uint(pxCoord.x * screenWidth * screenHeight) + uint(pxCoord.y * screenHeight);
+    // uint rngState = pxId + frameNumber;
+    uint pxId = uint(pxCoord.y) * uint(screenWidth) + uint(pxCoord.x);
+    uint rngState = pxId + uint(frameNumber * 747796405u); // prime multiplier
+
 
     // calculate the camere bits
     vec3 viewPointLocal = (vec3(fragPosition.xy / 2.0, 1) * ViewParams);
@@ -644,7 +672,6 @@ void main()
     Ray ray;
     ray.origin = CamGlobalPos;
     ray.dir = normalize(viewPoint);
-
 
 
     float camNearPlane = ViewParams.z;
@@ -669,17 +696,20 @@ void main()
         totalIncomingLight += traceRay(newRay, rngState);
         // totalIncomingLight += traceRay(ray, rngState);
 
-        float weight = 0.1;
+        float weight = 0.0;
         if (i == (RAYS_PER_PIXEL - 1))
         {
-            totalIncomingLight = totalIncomingLight * (1-weight) + weight * newRay.dir;
+            totalIncomingLight = totalIncomingLight * (1-weight) + weight * abs(newRay.dir);
+            // totalIncomingLight = totalIncomingLight * (1-weight) + weight * abs(newRay.prevHit.normal);
+            // totalIncomingLight = totalIncomingLight * (1-weight) + weight * abs(newRay.prevHit.dst);
+            // totalIncomingLight = totalIncomingLight * (1-weight) + weight * newRay.prevHit.material.color.xyz;
         }
     }
 
     totalIncomingLight /= RAYS_PER_PIXEL;
 
-    HitInfo hit0 = rayTriangle(ray, getTriangle(0));
-    HitInfo hit1 = rayTriangle(ray, getTriangle(1));
+    // HitInfo hit0 = rayTriangle(ray, getTriangle(0));
+    // HitInfo hit1 = rayTriangle(ray, getTriangle(1));
 
 
     if (STATIC_RENDER)

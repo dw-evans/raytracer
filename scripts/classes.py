@@ -39,6 +39,7 @@ class Material(ByteableObject):
         smoothness: float = 0.0,
         transmission: float = 0.0,
         ior: float = 1.0,
+        transparent_from_behind = False
     ) -> None:
 
         self.color = color
@@ -49,15 +50,18 @@ class Material(ByteableObject):
         self.transmission = transmission
         self.ior = ior
 
+        self.transparent_from_behind = transparent_from_behind
+
     def tobytes(self):
         return struct.pack(
-            "4f 3f f f f f4x",
+            "4f 3f f f f f i",
             *self.color,
             *self.emissionColor,
             self.emissionStrength,
             self.smoothness,
             self.transmission,
             self.ior,
+            self.transparent_from_behind
         )
 
     # def tobytes(self):

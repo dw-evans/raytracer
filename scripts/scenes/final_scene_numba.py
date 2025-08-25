@@ -46,25 +46,25 @@ material_red_passthrough = Material(
     Vector4((1.0, 0.0, 0.0, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
     smoothness=0.1,
-    # transparent_from_behind=True
+    transparent_from_behind=True
 )
 material_blue_passthrough = Material(
     Vector4((0.0, 0.0, 1.0, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
     smoothness=0.1,
-    # transparent_from_behind=True
+    transparent_from_behind=True
 )
 material_green_passthrough = Material(
     Vector4((0.0, 1.0, 0.0, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
     smoothness=0.1,
-    # transparent_from_behind=True
+    transparent_from_behind=True
 )
 material_white_passthrough = Material(
     Vector4((1.0, 1.0, 1.0, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
     smoothness=0.1,
-    # transparent_from_behind=True
+    transparent_from_behind=True
 )
 
 material_light_source_1 = Material(

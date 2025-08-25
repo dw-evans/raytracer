@@ -165,13 +165,14 @@ atmosphere_material = Material(
 scene.atmosphere_material = atmosphere_material
 
 body_material = Material(
-    Vector4([0.674, 0.203, 0.600, 1.0]),
-    smoothness = 0.95,
+    # Vector4([0.674, 0.203, 0.600, 1.0]),
+    Vector4([0.8, 0.3, 0.7, 1.0]),
+    smoothness = 0.8,
 )
 
 chrome_material = Material(
     Vector4([0.29, 0.29, 0.29, 1.0]),
-    smoothness = 0.9,
+    smoothness = 0.95,
 )
 
 glass_material = Material(
@@ -224,7 +225,7 @@ internal_plastic_material = Material(
 )
 
 internal_white_material = Material(
-    Vector4([0.1, 0.1, 0.1, 1.0]),
+    Vector4([0.95, 0.95, 0.95, 1.0]),
     smoothness = 0.5,
 )
 
@@ -236,18 +237,24 @@ seatbelt_material = Material(
 meshes = []
 
 load_data = [
-    # ("objects/car/black.obj", glass_material),
+    # ("objects/car/black.obj", black_material),
     # ("objects/car/body1.obj", body_material),
     # ("objects/car/chrome.obj", chrome_material),
-    ("objects/car/glass1.obj", glass_material),
+    # ("objects/car/glass1.obj", glass_material),
+
     # ("objects/car/internal_light.obj", internal_light_material),
     # ("objects/car/internal_plastic.obj", internal_plastic_material),
+
     # ("objects/car/internal_white.obj", internal_white_material),
+
     # ("objects/car/lights_rear_bottom.obj", light_material_1),
     # ("objects/car/lights_rear_top.obj", light_material_2),
     # ("objects/car/roof_fabric.obj", roof_material),
+
     # ("objects/car/rubber.obj", rubber_material),
+
     # ("objects/car/seatbelts.obj", seatbelt_material),
+
     # ("objects/car/wheels.obj", hubcap_material),
 
     # ("objects/car/cube_test.obj", glass_material),
@@ -255,14 +262,24 @@ load_data = [
     # ("objects/car/cube_test_3.obj", glass_material),
     # ("objects/smooth_disc.obj", glass_material),
 
-    ("objects/car/glass_test2.obj", glass_material),
-    ("objects/car/glass_test3.obj", glass_material),
+    # ("objects/car/glass_test2.obj", glass_material),
+    # ("objects/car/glass_test3.obj", glass_material),
+    # ("objects/car/glass_test4.obj", glass_material),
+    # ("objects/another_glass_test.obj", glass_material),
+    # ("objects/car/cube_test.obj", roof_material),
+
+
+    ("objects/tall_cubiod.obj", internal_white_material),
+    ("objects/window_pane_test.obj", glass_material),
 ]
-# ]
 
 car_csys = numba_scripts.classes.Csys()
-car_csys.pos = np.array([0.0, -1.0, 4.0], dtype=np.float32)
-car_csys.ryg(180-45)
+car_csys.pos = np.array([0.0, 0.0, 8.0], dtype=np.float32)
+# car_csys.ryg(180-45)
+car_csys.ryg(180)
+
+scene.cam.csys.pos = pyrr.Vector3([0, 2.0, 0], dtype="f2")
+
 
 for (i, (f, material)) in enumerate(load_data):
     msh = trimesh.load(f)

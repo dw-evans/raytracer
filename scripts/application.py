@@ -69,6 +69,8 @@ from watchdog.events import FileSystemEventHandler
 
 MAX_TRIANGLES_TO_LOAD = 200000
 
+
+
 def check_for_errors(ctx:moderngl.Context):
     error = ctx.error
     if error:
@@ -82,7 +84,8 @@ class Application:
     ) -> None:
         # window params
         self.DYNAMIC_RENDER_FRAMERATE = 24
-        self.WINDOW_HEIGHT = 1080 // 2
+        # self.WINDOW_HEIGHT = 1080 // 2
+        self.WINDOW_HEIGHT = 1440 // 2
         self.ASPECT_RATIO = 16 / 9
 
         # mouse / keyboard movement camera speeds
@@ -119,11 +122,14 @@ class Application:
         # self.display_scene = basic_scene.scene3
         # self.display_scene = basic_scene.scene
         # self.display_scene = animated_scene.scene
+        # self.display_scene = numba_test_scene.scene
         self.display_scene = scn.scene
 
         self.display_scene.validate_mesh_indices()
 
-        self.display_scene.cam.fov = 45
+        self.display_scene.cam.fov = 30
+        # self.display_scene.cam.csys.pos = np.array([0, 2, -2])
+        # self.display_scene.cam.csys.rxg(-20)
 
         self.register_program(
             DefaultShaderProgram(
@@ -146,15 +152,15 @@ class Application:
                 height=self.WINDOW_HEIGHT,
             ),
         )
-        # self.register_program(
-        #     RayTracerStatic(
-        #         app=self,
-        #         file_fragment_shader="shaders/raytracer.fs.glsl",
-        #         file_vertex_shader="shaders/raytracer.vs.glsl",
-        #         width=self.WINDOW_WIDTH,
-        #         height=self.WINDOW_HEIGHT,
-        #     ),
-        # )
+        self.register_program(
+            RayTracerStatic(
+                app=self,
+                file_fragment_shader="shaders/raytracer.fs.glsl",
+                file_vertex_shader="shaders/raytracer.vs.glsl",
+                width=self.WINDOW_WIDTH,
+                height=self.WINDOW_HEIGHT,
+            ),
+        )
 
         self.is_waiting_to_toggle = False
         self.is_animating = False
@@ -162,14 +168,17 @@ class Application:
         self.dt = 1 / self.DYNAMIC_RENDER_FRAMERATE
         self.reset_anim_key_pressed = False
         self.pause_play_anim_key_pressed = False
+        self.frame_counter = 0
+        self.export_directory = Path() / "renders/application" / f"{datetime.datetime.now().strftime("%Y.%m.%d_%H%M%S")}"
+        self.export_directory.mkdir(parents=True)
 
-        # self.display_program = self.programs["raytracer_static"]
 
         self.watchdog:threading.Thread = threading.Thread(target=self.run_file_watchdog)
         self.watchdog_command:callable = lambda: None
         self.watchdog_command_waiting = False
         self.watchdog_is_running = False
 
+        # self.display_program = self.programs["raytracer_static"]
 
     def start(self):
         self.running = True
@@ -296,17 +305,24 @@ class Application:
 
                 program_event_handler(event)
 
-            if self.is_animating:
-                print(self.animation_clock)
-                self.display_scene.animate(time=self.animation_clock)
-                self.display_program.configure_program(self.display_scene)
-                self.animation_clock = self.animation_clock + self.dt
-
             self.display_program.calculate_frame(self.display_scene)
             pygame.display.flip()
             self.clock.tick(self.DYNAMIC_RENDER_FRAMERATE)
 
         self.watchdog.join()
+
+    def save_frame_and_animate_next(self):
+        buffer = self.display_program.context.screen.read(components=3, dtype="f1")
+        size = (self.display_program.width, self.display_program.height)
+        img = functions.buffer_to_image(buffer, size)
+        img.save(self.export_directory / f"{self.frame_counter:05}.png")
+
+        if self.is_animating:
+            print(self.animation_clock)
+            self.display_scene.animate(time=self.animation_clock)
+            self.display_program.configure_program(self.display_scene)
+            self.animation_clock = self.animation_clock + self.dt
+
 
 
     class ShaderHandler(FileSystemEventHandler):
@@ -329,6 +345,8 @@ class Application:
                         print(f"Error during shader reloading. Check for errors: \n\n{e}\n")
                     self.app.display_program.configure_program(scene=self.app.display_scene)
                     print("Reloading Scene")
+                    # importlib.reload(numba_test_scene)
+                    # self.app.display_scene = numba_test_scene.scene
                     importlib.reload(scn)
                     self.app.display_scene = scn.scene
                     print("Scene reloaded")
@@ -378,6 +396,8 @@ class ProgramABC(ABC):
 
     vertices: np.ndarray
     standalone: bool
+
+
 
     def __init__(
         self,
@@ -570,9 +590,9 @@ class DefaultShaderProgram(ProgramABC):
         # CAM_ANTIALIAS_STRENGTH = 0.001
         # program["depthOfFieldStrength"].write(struct.pack("f", CAM_ANTIALIAS_STRENGTH))
 
-        sphere_bytes = functions.iter_to_bytes(spheres)
-        sphere_buffer = context.buffer(sphere_bytes)
-        sphere_buffer.bind_to_uniform_block(self.sphere_buffer_binding)
+        # sphere_bytes = functions.iter_to_bytes(spheres)
+        # sphere_buffer = context.buffer(sphere_bytes)
+        # sphere_buffer.bind_to_uniform_block(self.sphere_buffer_binding)
 
         # if MODIFICATION_WAITING:
         #     MODIFY_COMMAND()
@@ -707,7 +727,7 @@ class RayTracerDynamic(ProgramABC):
             standalone,
             require,
         )
-        self.MAX_RAY_BOUNCES = 6
+        self.MAX_RAY_BOUNCES = 8
         self.RAYS_PER_PIXEL = 1
 
         self.sphere_buffer_binding = 1
@@ -739,15 +759,15 @@ class RayTracerDynamic(ProgramABC):
 
         # initialise the uniforms
         program["screenWidth"].write(struct.pack("i", self.width))
-        program["screenHeight"].write(struct.pack("i", self.height))
+        # program["screenHeight"].write(struct.pack("i", self.height))
 
         program["spheresCount"].write(struct.pack("i", len(spheres)))
         
-        sphere_buffer_binding = 1
-        program["sphereBuffer"].binding = sphere_buffer_binding
-        sphere_bytes = functions.iter_to_bytes(spheres)
-        sphere_buffer = context.buffer(sphere_bytes)
-        sphere_buffer.bind_to_uniform_block(self.sphere_buffer_binding)
+        # sphere_buffer_binding = 1
+        # program["sphereBuffer"].binding = sphere_buffer_binding
+        # sphere_bytes = functions.iter_to_bytes(spheres)
+        # sphere_buffer = context.buffer(sphere_bytes)
+        # sphere_buffer.bind_to_uniform_block(self.sphere_buffer_binding)
 
         triangles = scene.triangles
         n_triangles = len(triangles)
@@ -805,7 +825,7 @@ class RayTracerDynamic(ProgramABC):
         # scene.meshes[0].csys.pos.z = 0.0 + 5.0 * sin(time / 2)
         # scene.spheres[-2].pos.x = 2 + 1.0 * sin(time)
 
-        program["frameNumber"].write(struct.pack("I", self.cycle_counter))
+        program["frameNumber"].write(struct.pack("I", self.shader_rng_counter))
         CAM_DEPTH_OF_FIELD_STRENGTH = 0.000
         program["depthOfFieldStrength"].write(
             struct.pack("f", CAM_DEPTH_OF_FIELD_STRENGTH),
@@ -915,18 +935,18 @@ class RayTracerDynamic(ProgramABC):
 
         if mouse_enabled:
             mouse_x, mouse_y = pygame.mouse.get_pos()
-            mouse_ray = functions.convert_screen_coords_to_camera_ray(
-                mouse_x,
-                mouse_y,
-                app.screen.get_width(),
-                app.screen.get_height(),
-                cam=scene.cam,
-            )
-            hits = functions.rayScene(mouse_ray, scene)
-            hits = [h for h in hits if isinstance(h[1], Triangle | Sphere)]
-            if hits:
-                # mouse_sphere.pos = hits[0][2]
-                pass
+            # mouse_ray = functions.convert_screen_coords_to_camera_ray(
+            #     mouse_x,
+            #     mouse_y,
+            #     app.screen.get_width(),
+            #     app.screen.get_height(),
+            #     cam=scene.cam,
+            # )
+            # hits = functions.rayScene(mouse_ray, scene)
+            # hits = [h for h in hits if isinstance(h[1], Triangle | Sphere)]
+            # if hits:
+            #     # mouse_sphere.pos = hits[0][2]
+            #     pass
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 # middle mouse button
@@ -992,8 +1012,10 @@ class RayTracerStatic(ProgramABC):
             standalone,
             require,
         )
-        self.MAX_RAY_BOUNCES = 8
-        self.RAYS_PER_PIXEL = 1
+        self.MAX_RAY_BOUNCES = 32
+        self.RAYS_PER_PIXEL = 8
+        self.CYCLES_PER_FRAME = 1
+
 
         self.sphere_buffer_binding = 1
         self.is_scene_static = True
@@ -1011,7 +1033,7 @@ class RayTracerStatic(ProgramABC):
         self.frame_counter = 0
         self.cycle_counter = 0
         self.shader_rng_counter = 0
-        self.target_dir = Path() / "renders" / f"{datetime.datetime.now().strftime("%Y.%m.%d_%H%M%S")}"
+        self.target_dir = Path() / "renders/RayTracerStatic" / f"{datetime.datetime.now().strftime("%Y.%m.%d_%H%M%S")}"
         self.target_dir.mkdir(parents=True)
 
         program["STATIC_RENDER"].write(struct.pack("i", True))
@@ -1029,11 +1051,11 @@ class RayTracerStatic(ProgramABC):
 
         program["spheresCount"].write(struct.pack("i", len(spheres)))
         
-        sphere_buffer_binding = 1
-        program["sphereBuffer"].binding = sphere_buffer_binding
-        sphere_bytes = functions.iter_to_bytes(spheres)
-        sphere_buffer = context.buffer(sphere_bytes)
-        sphere_buffer.bind_to_uniform_block(self.sphere_buffer_binding)
+        # sphere_buffer_binding = 1
+        # program["sphereBuffer"].binding = sphere_buffer_binding
+        # sphere_bytes = functions.iter_to_bytes(spheres)
+        # sphere_buffer = context.buffer(sphere_bytes)
+        # sphere_buffer.bind_to_uniform_block(self.sphere_buffer_binding)
 
         triangles = scene.triangles
         n_triangles = len(triangles)
@@ -1075,6 +1097,7 @@ class RayTracerStatic(ProgramABC):
 
     def calculate_frame(self, scene: Scene):
 
+        self.cycle_counter += 1
 
         vao = self.vao
         program = self.program
@@ -1090,12 +1113,12 @@ class RayTracerStatic(ProgramABC):
         # scene.meshes[0].csys.pos.z = 0.0 + 5.0 * sin(time / 2)
         # scene.spheres[-2].pos.x = 2 + 1.0 * sin(time)
 
-        program["frameNumber"].write(struct.pack("I", self.cycle_counter))
+        program["frameNumber"].write(struct.pack("I", self.shader_rng_counter))
         CAM_DEPTH_OF_FIELD_STRENGTH = 0.000
         program["depthOfFieldStrength"].write(
             struct.pack("f", CAM_DEPTH_OF_FIELD_STRENGTH),
         )
-        CAM_ANTIALIAS_STRENGTH = 0.000001
+        CAM_ANTIALIAS_STRENGTH = 0.000003
         program["depthOfFieldStrength"].write(
             struct.pack("f", CAM_ANTIALIAS_STRENGTH),
         )
@@ -1111,25 +1134,19 @@ class RayTracerStatic(ProgramABC):
         render_data = context.screen.read(components=3, dtype="f1")
         self.texture.write(render_data)
 
-        # if self.is_scene_static:
-        #     self.cycle_counter += 1
-        # else:
-        #     self.is_scene_static = True
-        #     self.cycle_counter = 0
         buffer = context.screen.read(components=3, dtype="f1")
         size = (self.width, self.height)
         # img = functions.buffer_to_image(render_data, (self.width, self.height))
         img = functions.buffer_to_image(buffer, size)
 
-        img.save(self.target_dir / f"{self.cycle_counter:05}.png")
+        img.save(self.target_dir / f"{self.frame_counter:05}_{self.cycle_counter:05}.png")
 
-        if self.cycle_counter == 60:
-            self.app.end()
-        
+        if self.cycle_counter >= self.CYCLES_PER_FRAME:
+            self.app.save_frame_and_animate_next()
+            self.cycle_counter = 0
+            self.frame_counter += 1
+
         self.shader_rng_counter += 1
-        self.cycle_counter += 1
-
-
 
         self.context.gc()
 

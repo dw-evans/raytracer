@@ -340,7 +340,7 @@ def main_loop():
         sky_color = Vector3((131, 200, 228), dtype="f4") / 255
         ground_color = Vector3((74, 112, 45), dtype="f4") / 255
 
-        prog1["skyColor"].write(struct.pack("3f", *sky_color))
+        # prog1["skyColor"].write(struct.pack("3f", *sky_color))
 
         material_buffer = ctx1.buffer(iter_to_bytes([highlight_material]))
         material_buffer_binding = 11
