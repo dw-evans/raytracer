@@ -262,15 +262,23 @@ load_data = [
     # ("objects/car/cube_test_3.obj", glass_material),
     # ("objects/smooth_disc.obj", glass_material),
 
-    # ("objects/car/glass_test2.obj", glass_material),
+    ("objects/car/glass_test2.obj", glass_material),
     # ("objects/car/glass_test3.obj", glass_material),
     # ("objects/car/glass_test4.obj", glass_material),
     # ("objects/another_glass_test.obj", glass_material),
     # ("objects/car/cube_test.obj", roof_material),
 
 
-    ("objects/tall_cubiod.obj", internal_white_material),
-    ("objects/window_pane_test.obj", glass_material),
+    # ("objects/tall_cubiod.obj", internal_white_material),
+    # ("objects/window_pane_test.obj", glass_material),
+
+
+    ("objects/testing/test-cube.obj", rubber_material),
+    # ("objects/testing/window-left.obj", glass_material),
+    # ("objects/testing/window-right.obj", glass_material),
+    # ("objects/testing/window-front.obj", glass_material),
+    # ("objects/testing/test-window-2.obj", glass_material),
+    ("objects/testing/test-window-7.obj", glass_material),
 ]
 
 car_csys = numba_scripts.classes.Csys()

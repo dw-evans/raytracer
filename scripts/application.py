@@ -50,10 +50,10 @@ from typing import Generator
 
 # from scripts.scenes import basic_scene
 # from scripts.scenes import animated_scene
-# from scripts.scenes import numba_test_scene
-from scripts.scenes import final_scene_numba
+from scripts.scenes import numba_test_scene
+# from scripts.scenes import final_scene_numba
 
-scn = final_scene_numba
+scn = numba_test_scene
 
 from pathlib import Path
 import datetime
@@ -590,9 +590,10 @@ class DefaultShaderProgram(ProgramABC):
         # CAM_ANTIALIAS_STRENGTH = 0.001
         # program["depthOfFieldStrength"].write(struct.pack("f", CAM_ANTIALIAS_STRENGTH))
 
-        # sphere_bytes = functions.iter_to_bytes(spheres)
-        # sphere_buffer = context.buffer(sphere_bytes)
-        # sphere_buffer.bind_to_uniform_block(self.sphere_buffer_binding)
+        sphere_bytes = functions.iter_to_bytes(spheres)
+        if len(sphere_bytes) > 0:
+            sphere_buffer = context.buffer(sphere_bytes)
+            sphere_buffer.bind_to_uniform_block(self.sphere_buffer_binding)
 
         # if MODIFICATION_WAITING:
         #     MODIFY_COMMAND()
@@ -763,11 +764,12 @@ class RayTracerDynamic(ProgramABC):
 
         program["spheresCount"].write(struct.pack("i", len(spheres)))
         
-        # sphere_buffer_binding = 1
-        # program["sphereBuffer"].binding = sphere_buffer_binding
-        # sphere_bytes = functions.iter_to_bytes(spheres)
-        # sphere_buffer = context.buffer(sphere_bytes)
-        # sphere_buffer.bind_to_uniform_block(self.sphere_buffer_binding)
+        sphere_buffer_binding = 1
+        program["sphereBuffer"].binding = sphere_buffer_binding
+        sphere_bytes = functions.iter_to_bytes(spheres)
+        if len(sphere_bytes) > 0:
+            sphere_buffer = context.buffer(sphere_bytes)
+            sphere_buffer.bind_to_uniform_block(self.sphere_buffer_binding)
 
         triangles = scene.triangles
         n_triangles = len(triangles)
@@ -810,7 +812,6 @@ class RayTracerDynamic(ProgramABC):
 
     def calculate_frame(self, scene: Scene):
 
-
         vao = self.vao
         program = self.program
         context = self.context
@@ -852,6 +853,9 @@ class RayTracerDynamic(ProgramABC):
         else:
             self.is_scene_static = True
             self.cycle_counter = 0
+            program["frameNumber"].write(struct.pack("I", 0))
+            pass
+
 
         self.shader_rng_counter += 1
 
@@ -1051,11 +1055,12 @@ class RayTracerStatic(ProgramABC):
 
         program["spheresCount"].write(struct.pack("i", len(spheres)))
         
-        # sphere_buffer_binding = 1
-        # program["sphereBuffer"].binding = sphere_buffer_binding
-        # sphere_bytes = functions.iter_to_bytes(spheres)
-        # sphere_buffer = context.buffer(sphere_bytes)
-        # sphere_buffer.bind_to_uniform_block(self.sphere_buffer_binding)
+        sphere_buffer_binding = 1
+        program["sphereBuffer"].binding = sphere_buffer_binding
+        if len(sphere_bytes) > 0:
+            sphere_bytes = functions.iter_to_bytes(spheres)
+            sphere_buffer = context.buffer(sphere_bytes)
+            sphere_buffer.bind_to_uniform_block(self.sphere_buffer_binding)
 
         triangles = scene.triangles
         n_triangles = len(triangles)
