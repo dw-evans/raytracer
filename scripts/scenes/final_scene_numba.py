@@ -135,7 +135,7 @@ load_data = [
 ]
 
 car_csys = numba_scripts.classes.Csys()
-car_csys.pos = np.array([0.0, 1.0, 8.0], dtype=np.float32)
+car_csys._pos = np.array([0.0, 1.0, 8.0], dtype=np.float32)
 # car_csys.ryg(180-45)
 car_csys.ryg(180)
 # car_csys.ryg(135)

@@ -17,7 +17,7 @@ from .functions import (
 import numpy as np
 
 spec_csys = [
-    ("pos", float32[:]),
+    ("_pos", float32[:]),
     ("quat", float32[:]),
 ]
 
@@ -26,7 +26,7 @@ class Csys:
     """Numba-compiled Csys class"""
     
     def __init__(self) -> None:
-        self.pos = np.array([0, 0, 0], dtype=np.float32)
+        self._pos = np.array([0, 0, 0], dtype=np.float32)
         self.quat = np.array([0, 0, 0, 1], dtype=np.float32)
 
     @property
@@ -36,8 +36,16 @@ class Csys:
     @property
     def transformation_matrix(self):
         ret = mat44_create_from_quaternion(self.quat)
-        ret[3][0:3] = self.pos
+        ret[3][0:3] = self._pos
         return ret
+    
+    def set_pos(self, p) -> Csys:
+        val = np.array(p, dtype=np.float32)
+        if not val.shape == (3,):
+            raise ValueError("must provide (3,) vector")
+        self._pos = val
+        return self
+
 
     def rxg(self, degrees: float) -> Csys:
         rad = np.radians(degrees)
@@ -76,30 +84,30 @@ class Csys:
         return self
     
     def tg(self, pos:np.ndarray) -> Csys:
-        self.pos = pos.astype(np.float32)
+        self._pos = pos.astype(np.float32)
 
     def txg(self, dst:float) -> Csys:
-        self.pos[0] += dst
+        self._pos[0] += dst
         return self
     
     def tyg(self, dst:float) -> Csys:
-        self.pos[1] += dst
+        self._pos[1] += dst
         return self
     
     def tzg(self, dst:float) -> Csys:
-        self.pos[2] += dst
+        self._pos[2] += dst
         return self
     
     def txp(self, dst:float) -> Csys:
-        self.pos += dst * self.rotation_matrix[0][0:3]
+        self._pos += dst * self.rotation_matrix[0][0:3]
         return self
     
     def typ(self, dst:float) -> Csys:
-        self.pos += dst * self.rotation_matrix[1][0:3]
+        self._pos += dst * self.rotation_matrix[1][0:3]
         return self
     
     def tzp(self, dst:float) -> Csys:
-        self.pos += dst * self.rotation_matrix[2][0:3]
+        self._pos += dst * self.rotation_matrix[2][0:3]
         return self
     
 
@@ -333,6 +341,6 @@ def triangles_from_obj_data(
 if __name__ == "__main__":
     x = Csys()
     x.rzg(10.0)
-    x.pos = np.array([2, 5, 10])
+    x._pos = np.array([2, 5, 10])
 
         

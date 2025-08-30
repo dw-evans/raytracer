@@ -278,7 +278,7 @@ def update_mesh_pos_testing():
 
 
     simulated_csys = Csys()
-    simulated_csys.pos = np.array([10, 12, 0], dtype=np.float32)
+    simulated_csys._pos = np.array([10, 12, 0], dtype=np.float32)
     simulated_csys.rzg(30)
     # simulated_csys.rxg(15)
 

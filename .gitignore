@@ -1,4 +1,7 @@
 *.blend
+*.stl
+*.obj
+*.mtl
 
 *.mp4
 *.png

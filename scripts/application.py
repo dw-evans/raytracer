@@ -67,8 +67,7 @@ import importlib
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-MAX_TRIANGLES_TO_LOAD = 200000
-
+# MAX_TRIANGLES_TO_LOAD = 1_000
 
 
 def check_for_errors(ctx:moderngl.Context):
@@ -84,8 +83,8 @@ class Application:
     ) -> None:
         # window params
         self.DYNAMIC_RENDER_FRAMERATE = 24
-        # self.WINDOW_HEIGHT = 1080 // 2
-        self.WINDOW_HEIGHT = 1440 // 2
+        self.WINDOW_HEIGHT = 1080 // 8
+        # self.WINDOW_HEIGHT = 1440 // 8
         self.ASPECT_RATIO = 16 / 9
 
         # mouse / keyboard movement camera speeds
@@ -178,7 +177,7 @@ class Application:
         self.watchdog_command_waiting = False
         self.watchdog_is_running = False
 
-        # self.display_program = self.programs["raytracer_static"]
+        self.display_program = self.programs["raytracer_static"]
 
     def start(self):
         self.running = True
@@ -1016,10 +1015,9 @@ class RayTracerStatic(ProgramABC):
             standalone,
             require,
         )
-        self.MAX_RAY_BOUNCES = 32
-        self.RAYS_PER_PIXEL = 8
+        self.MAX_RAY_BOUNCES = 8
+        self.RAYS_PER_PIXEL = 1
         self.CYCLES_PER_FRAME = 1
-
 
         self.sphere_buffer_binding = 1
         self.is_scene_static = True
@@ -1051,14 +1049,14 @@ class RayTracerStatic(ProgramABC):
 
         # initialise the uniforms
         program["screenWidth"].write(struct.pack("i", self.width))
-        program["screenHeight"].write(struct.pack("i", self.height))
+        # program["screenHeight"].write(struct.pack("i", self.height))
 
         program["spheresCount"].write(struct.pack("i", len(spheres)))
         
         sphere_buffer_binding = 1
         program["sphereBuffer"].binding = sphere_buffer_binding
+        sphere_bytes = functions.iter_to_bytes(spheres)
         if len(sphere_bytes) > 0:
-            sphere_bytes = functions.iter_to_bytes(spheres)
             sphere_buffer = context.buffer(sphere_bytes)
             sphere_buffer.bind_to_uniform_block(self.sphere_buffer_binding)
 
@@ -1124,7 +1122,7 @@ class RayTracerStatic(ProgramABC):
             struct.pack("f", CAM_DEPTH_OF_FIELD_STRENGTH),
         )
         CAM_ANTIALIAS_STRENGTH = 0.000003
-        program["depthOfFieldStrength"].write(
+        program["antialiasStrength"].write(
             struct.pack("f", CAM_ANTIALIAS_STRENGTH),
         )
 

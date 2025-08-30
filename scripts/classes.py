@@ -359,6 +359,7 @@ class Camera:
 
         self.csys = Csys()
 
+
     @property
     def orientation(self):
         """Returns the mat44 based on the pitch, roll, yaw angles.
@@ -400,6 +401,13 @@ class Csys:
     def __init__(self):
         self.pos = Vector3((0.0, 0.0, 0.0))
         self.quat = pyrr.Quaternion()
+
+    def set_pos(self, p) -> Csys:
+        val = np.array(p, dtype=np.float32)
+        if not val.shape == (3,):
+            raise ValueError("must provide (3,) vector")
+        self.pos = val
+        return self
 
     @property
     def rotation_matrix(self) -> Matrix33:

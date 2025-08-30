@@ -4,7 +4,7 @@ from ..classes import (
     Triangle,
     Sphere,
     Material,
-    Csys,
+    # Csys,
 )
 
 import pyrr
@@ -17,8 +17,6 @@ from pyrr import (
 )
 
 from pathlib import Path
-
-
 
 
 material_plain_1 = Material(
@@ -128,6 +126,7 @@ pass
 import trimesh
 import numpy as np
 import numba_scripts.classes
+from numba_scripts.classes import Csys
 
 # msh = trimesh.load("objects/tyre_tread.obj")
 
@@ -151,9 +150,9 @@ import numba_scripts.classes
 atmosphere_material = Material(
     Vector4(
         (
-            1.0,
-            1.0,
-            1.0,
+            0.2,
+            0.2,
+            0.2,
             1.0,
         ),
         dtype="f4",
@@ -166,137 +165,146 @@ scene.atmosphere_material = atmosphere_material
 
 body_material = Material(
     # Vector4([0.674, 0.203, 0.600, 1.0]),
-    Vector4([0.8, 0.3, 0.7, 1.0]),
-    smoothness = 0.8,
+    Vector4([0.6706, 0.7373, 0.8392, 1.0]),
+    smoothness=0.8,
 )
+
+
 
 chrome_material = Material(
     Vector4([0.29, 0.29, 0.29, 1.0]),
-    smoothness = 0.95,
+    smoothness=0.95,
 )
 
 glass_material = Material(
-    Vector4([1., 1, 1, 1]),
-    transmission = 1.0,
+    Vector4([1.0, 1, 1, 1]),
+    transmission=1.0,
     smoothness=1.0,
-    ior = 1.5,
+    ior=1.5,
 )
 roof_material = Material(
-    Vector4([0.095, 0.01, 0.016, 1.0]),
+    Vector4([0.3412, 0.1020, 0.1333, 1.0]),
     smoothness=0,
 )
 hubcap_material = Material(
     Vector4([0.8, 0.8, 0.8, 1.0]),
-    smoothness = 0.5,
+    smoothness=0.5,
 )
 
 black_material = Material(
     Vector4([0.1, 0.1, 0.1, 1.0]),
-    smoothness = 0.5,
+    smoothness=0.5,
 )
 
 rubber_material = Material(
     Vector4([0.1, 0.1, 0.1, 1.0]),
-    smoothness = 0.5,
+    smoothness=0.5,
 )
 
 light_material_1 = Material(
-    Vector4([1., 0.327, 0.0, 1.0]),
-    transmission = 0.8,
+    Vector4([1.0, 0.327, 0.0, 1.0]),
+    transmission=0.8,
     smoothness=1.0,
-    ior = 1.1,
+    ior=1.6,
 )
 light_material_2 = Material(
-    Vector4([1., 0.0, 0.0, 1.0]),
-    transmission = 0.8,
+    Vector4([1.0, 0.0, 0.0, 1.0]),
+    transmission=0.8,
     smoothness=1.0,
-    ior = 1.1,
+    ior=1.6,
 )
 
 internal_light_material = Material(
     Vector4([0.0, 0.0, 0.0, 1.0]),
-    emissionColor=Vector3([1., 1., 1.]),
-    emissionStrength=5.0
+    emissionColor=Vector3([1.0, 1.0, 1.0]),
+    emissionStrength=5.0,
 )
 
 internal_plastic_material = Material(
     Vector4([0.3, 0.3, 0.3, 1.0]),
-    smoothness = 0.5,
+    smoothness=0.5,
 )
 
 internal_white_material = Material(
     Vector4([0.95, 0.95, 0.95, 1.0]),
-    smoothness = 0.5,
+    smoothness=0.5,
 )
 
 seatbelt_material = Material(
     Vector4([0.15, 0.15, 0.15, 1.0]),
-    smoothness = 0.5,
+    smoothness=0.5,
+)
+
+floor_material = Material(
+    Vector4((0.5, 0.5, 0.5, 1.0), dtype="f4"),
+    Vector3((0.0, 0.0, 0.0), dtype="f4"),
+    0.0,
+    smoothness=0.0,
+)
+
+light_bar_material = Material(
+    Vector4([0.0, 0.0, 0.0, 1.0]),
+    emissionColor=Vector3([1.0, 1.0, 1.0]),
+    emissionStrength=3.0,
+)
+light_bar_cover_material = Material(
+    Vector4((0.1, 0.1, 0.1, 1.0), dtype="f4"),
+    Vector3((0.0, 0.0, 0.0), dtype="f4"),
+    0.0,
+    smoothness=0.0,
 )
 
 meshes = []
 
-load_data = [
-    # ("objects/car/black.obj", black_material),
-    # ("objects/car/body1.obj", body_material),
-    # ("objects/car/chrome.obj", chrome_material),
-    # ("objects/car/glass1.obj", glass_material),
 
-    # ("objects/car/internal_light.obj", internal_light_material),
-    # ("objects/car/internal_plastic.obj", internal_plastic_material),
+"abbcd6" # car color blue
+"571a22" # cloth color
 
-    # ("objects/car/internal_white.obj", internal_white_material),
+DEFAULT_CSYS = Csys()
 
-    # ("objects/car/lights_rear_bottom.obj", light_material_1),
-    # ("objects/car/lights_rear_top.obj", light_material_2),
-    # ("objects/car/roof_fabric.obj", roof_material),
+scene.cam.csys.pos = pyrr.Vector3([0, 1.0, 0], dtype="f2")
 
-    # ("objects/car/rubber.obj", rubber_material),
+car_csys = numba_scripts.classes.Csys()
+car_csys.set_pos([0.0, 0.0, 8.0])
+car_csys.ryg(180-45)
+# car_csys.ryg(180)
 
-    # ("objects/car/seatbelts.obj", seatbelt_material),
-
-    # ("objects/car/wheels.obj", hubcap_material),
-
-    # ("objects/car/cube_test.obj", glass_material),
-    # ("objects/car/cube_test_2.obj", glass_material),
-    # ("objects/car/cube_test_3.obj", glass_material),
-    # ("objects/smooth_disc.obj", glass_material),
-
-    ("objects/car/glass_test2.obj", glass_material),
-    # ("objects/car/glass_test3.obj", glass_material),
-    # ("objects/car/glass_test4.obj", glass_material),
-    # ("objects/another_glass_test.obj", glass_material),
-    # ("objects/car/cube_test.obj", roof_material),
-
-
-    # ("objects/tall_cubiod.obj", internal_white_material),
-    # ("objects/window_pane_test.obj", glass_material),
-
-
-    ("objects/testing/test-cube.obj", rubber_material),
+name_material_pose = [
+    # ("objects/testing/test-cube.obj", rubber_material, Csys().set_pos((0, 0, 0))),
     # ("objects/testing/window-left.obj", glass_material),
     # ("objects/testing/window-right.obj", glass_material),
     # ("objects/testing/window-front.obj", glass_material),
     # ("objects/testing/test-window-2.obj", glass_material),
-    ("objects/testing/test-window-7.obj", glass_material),
+    # ("objects/testing/test-window-7.obj", glass_material),
+    # ("objects/car/glass_test5.obj", glass_material, Csys().set_pos((0, 0, 8))),
+    # ("objects/car/black.obj", black_material, car_csys),
+    # ("objects/car/body1.obj", body_material, car_csys),
+
+    ("objects/car_new/body-chrome.obj", chrome_material, car_csys),
+    ("objects/car_new/body-panels.obj", body_material, car_csys),
+    ("objects/car_new/floor.obj", floor_material, car_csys),
+    ("objects/car_new/foglights-glass.obj", glass_material, car_csys),
+    ("objects/car_new/glass.obj", glass_material, car_csys),
+    ("objects/car_new/headlights-glass.obj", glass_material, car_csys),
+    ("objects/car_new/light-inner.obj", light_bar_material, car_csys),
+    ("objects/car_new/light-outer.obj", light_bar_cover_material, car_csys),
+    ("objects/car_new/roof.obj", roof_material, car_csys),
+    ("objects/car_new/rubber.obj", rubber_material, car_csys),
+    ("objects/car_new/wheels.obj", hubcap_material, car_csys),
+
 ]
 
-car_csys = numba_scripts.classes.Csys()
-car_csys.pos = np.array([0.0, 0.0, 8.0], dtype=np.float32)
-# car_csys.ryg(180-45)
-car_csys.ryg(180)
-
-scene.cam.csys.pos = pyrr.Vector3([0, 2.0, 0], dtype="f2")
 
 
-for (i, (f, material)) in enumerate(load_data):
-    msh = trimesh.load(f)
+
+for i, (_fname, _material, _csys) in enumerate(name_material_pose):
+    msh = trimesh.load(_fname)
 
     vertex_indices_arr = msh.faces.astype(np.int32)
     vertices = msh.vertices.astype(np.float32)
     vertex_normals = msh.vertex_normals.astype(np.float32)
-    
-    triangle_count_start = scene.count_triangles() 
+
+    triangle_count_start = scene.count_triangles()
     mesh_idx = i
     triangles = numba_scripts.classes.triangles_from_obj_data(
         vertex_indices_arr,
@@ -306,24 +314,26 @@ for (i, (f, material)) in enumerate(load_data):
         triangle_count_start,
     )
 
-    msh1 = Mesh(material=material)
-
-    msh1.csys = car_csys
-
+    msh1 = Mesh(material=_material)
+    # msh1.csys = car_csys
+    msh1.csys = _csys
     msh1.triangles = triangles
-
     scene.meshes.append(msh1)
 
 print(f"There are `{scene.count_triangles()}` triangles in the scene.")
 
-# from ..animate import Animation
-# from math import sin, cos, tan, pi
 
-# import numba_scripts.classes
-# def mesh_csys_animate(obj: numba_scripts.classes.Csys, t):
-#     obj.pos[0] = 0.0 + 10.0 * sin(t / 2)
-#     obj.pos[1] = -0.5
-#     obj.pos[2] = 6.0 + 5.0 * sin(t / 3)
+
+from ..animate import Animation
+from math import sin, cos, tan, pi
+
+import numba_scripts.classes
+def mesh_csys_animate(obj: numba_scripts.classes.Csys, t):
+    obj.pos[0] = 0.0 + 10.0 * sin(t / 2)
+    obj.pos[1] = -0.5
+    obj.pos[2] = 6.0 + 5.0 * sin(t / 3)
+
+# scene.animations.append(Animation(scene.meshes[0].csys))
 
 
 # def camera_csys_animate(obj: Csys, t):
