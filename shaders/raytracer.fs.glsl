@@ -37,6 +37,13 @@ uniform int selectedMeshId;
 uniform float depthOfFieldStrength;
 uniform float antialiasStrength;
 
+
+uniform int chunkx;
+uniform int chunky;
+
+uniform int chunksx;
+uniform int chunksy;
+
 // uniform bool oneSidedTris;
 
 float inf = 1.0 / 0.0;
@@ -712,6 +719,26 @@ vec4 gammaCorrect(vec4 color, float gamma)
 void main() 
 {
 
+    vec2 fragAbsPos = (fragPosition.xy + 1.0) * 0.5;
+
+    // bool inx = (fragAbsPos.x >= (chunkx/(chunksx))) && (fragAbsPos.x < ((chunkx+1)/(chunksx)));
+    // bool iny = (fragAbsPos.y >= (chunky/(chunksy))) && (fragAbsPos.y < ((chunky+1)/(chunksy)));
+
+    bool inx = (fragAbsPos.x >= (chunkx / float(chunksx))) && (fragAbsPos.x < ((chunkx + 1) / float(chunksx)));
+    bool iny = (fragAbsPos.y >= (chunky / float(chunksy))) && (fragAbsPos.y < ((chunky + 1) / float(chunksy)));
+
+
+    // if not in x or y, color is the sample of the previous texture (black or previous render.)
+    // if (!(inx && iny)) {
+    if (!(inx && iny)) {
+        color =
+        texture(previousFrame, (fragPosition.xy + 1.0) / 2)
+        // vec4(1.0)
+        ;
+        return;
+    }
+    
+    
     uint numPixels = screenWidth * screenHeight;
     vec4 pxCoord = gl_FragCoord;
     // uint pxId = uint(pxCoord.x * screenWidth * screenHeight) + uint(pxCoord.y * screenHeight);

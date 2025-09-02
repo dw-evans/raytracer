@@ -82,10 +82,15 @@ class Application:
         self,
     ) -> None:
         # window params
+
+        factor = 1
         self.DYNAMIC_RENDER_FRAMERATE = 24
-        self.WINDOW_HEIGHT = 1080 // 8
+        self.WINDOW_HEIGHT = 1080 // factor
         # self.WINDOW_HEIGHT = 1440 // 8
         self.ASPECT_RATIO = 16 / 9
+
+        self.CHUNKSX = 8 * factor
+        self.CHUNKSY = 8 * factor
 
         # mouse / keyboard movement camera speeds
         self.CAMERA_LINEAR_SPEED = 3.0
@@ -109,12 +114,16 @@ class Application:
         self.MOUSE_LAST_POS: list[float] = [0, 0]
         self.MMB_PRESSED: bool = False
 
+
         pygame.init()
 
         self.screen = pygame.display.set_mode(
             (self.WINDOW_WIDTH, self.WINDOW_HEIGHT),
             pygame.OPENGL | pygame.DOUBLEBUF,
         )
+        pygame.display.gl_set_attribute(pygame.GL_SWAP_CONTROL, 0)
+        pygame.display.gl_set_attribute(pygame.GL_CONTEXT_FLAGS, pygame.GL_CONTEXT_DEBUG_FLAG)
+
         self.clock = pygame.time.Clock()
         # self.display_scene = basic_scene.scene
         # self.display_scene = basic_scene.scene2
@@ -305,7 +314,7 @@ class Application:
                 program_event_handler(event)
 
             self.display_program.calculate_frame(self.display_scene)
-            pygame.display.flip()
+            # pygame.display.flip()
             self.clock.tick(self.DYNAMIC_RENDER_FRAMERATE)
 
         self.watchdog.join()
@@ -461,7 +470,7 @@ class ProgramABC(ABC):
         else:
             self.fbo = self.context.framebuffer(
                 color_attachments=[
-                    self.context.texture((self.width, self.height), components=4)
+                    self.context.texture((self.width, self.height), components=3)
                 ],
             )
 
@@ -727,7 +736,7 @@ class RayTracerDynamic(ProgramABC):
             standalone,
             require,
         )
-        self.MAX_RAY_BOUNCES = 8
+        self.MAX_RAY_BOUNCES = 1
         self.RAYS_PER_PIXEL = 1
 
         self.sphere_buffer_binding = 1
@@ -739,9 +748,12 @@ class RayTracerDynamic(ProgramABC):
         spheres = scene.spheres
         context = self.context
 
-        self.texture = self.context.texture((self.width, self.height), 3)
-        self.texture.use(location=1)
+
+
+        self.texB = self.context.texture((self.width, self.height), 3)
+        self.texB.use(location=1)
         self.program["previousFrame"] = 1
+
 
         self.frame_counter = 0
         self.cycle_counter = 0
@@ -840,12 +852,12 @@ class RayTracerDynamic(ProgramABC):
         program["CamGlobalPos"].write(cam.csys.pos.astype("f4"))
 
 
-        self.texture.use(location=1)
+        self.texB.use(location=1)
 
         vao.render(mode=moderngl.TRIANGLE_STRIP)
 
         render_data = context.screen.read(components=3, dtype="f1")
-        self.texture.write(render_data)
+        self.texB.write(render_data)
 
         if self.is_scene_static:
             self.cycle_counter += 1
@@ -1015,7 +1027,7 @@ class RayTracerStatic(ProgramABC):
             standalone,
             require,
         )
-        self.MAX_RAY_BOUNCES = 8
+        self.MAX_RAY_BOUNCES = 16
         self.RAYS_PER_PIXEL = 1
         self.CYCLES_PER_FRAME = 1
 
@@ -1028,9 +1040,37 @@ class RayTracerStatic(ProgramABC):
         spheres = scene.spheres
         context = self.context
 
-        self.texture = self.context.texture((self.width, self.height), 3)
-        self.texture.use(location=1)
-        self.program["previousFrame"] = 1
+        vertices = np.array([
+            # x, y, u, v
+            -1.0, -1.0, 0.0, 0.0,
+            1.0, -1.0, 1.0, 0.0,
+            -1.0,  1.0, 0.0, 1.0,
+            1.0,  1.0, 1.0, 1.0,
+        ], dtype='f4')
+
+        with open("shaders/toScreen.fs.glsl") as f:
+            fs = f.read()
+        with open("shaders/toScreen.vs.glsl") as f:
+            vs = f.read()
+
+        self.screen_prog = self.context.program(
+            vertex_shader=vs,
+            fragment_shader=fs,
+        )
+
+        self.screen_vbo = context.buffer(vertices.tobytes())
+        self.screen_vao = context.simple_vertex_array(self.screen_prog, self.screen_vbo, 'in_pos', 'in_uv')
+
+
+        self.texA = self.context.texture((self.width, self.height), 3)
+        self.texA.use(location=0)
+
+        # self.fbo = context.framebuffer(color_attachments=[self.texA])
+        self.texB = self.context.texture((self.width, self.height), 3)
+
+
+        self.fboA = context.framebuffer(color_attachments=[self.texA])
+        self.fboB = context.framebuffer(color_attachments=[self.texB])
 
         self.frame_counter = 0
         self.cycle_counter = 0
@@ -1097,6 +1137,90 @@ class RayTracerStatic(ProgramABC):
         program["materialBuffer"].binding = material_buffer_binding
         material_buffer.bind_to_uniform_block(material_buffer_binding)
 
+        program["chunksx"].write(struct.pack("i", self.app.CHUNKSX))
+        program["chunksy"].write(struct.pack("i", self.app.CHUNKSY))
+
+
+
+    def calculate_frame_via_chunking(self, scene:Scene, flip:bool=True):
+        import gc
+        gc.disable()
+        vao = self.vao
+        program = self.program
+        context = self.context
+        cam = scene.cam
+
+        time_of_last_render = time.time_ns()
+        time_between_renders = 1/144 * 1e9
+        _t = time_of_last_render
+
+        for i in range(self.app.CHUNKSX):
+            for j in range(self.app.CHUNKSY):
+                program["chunkx"].write(struct.pack("i", i))
+                program["chunky"].write(struct.pack("i", j))
+
+                # use texB as the previous frame sampler
+                self.texB.use(location=1)
+                # render to fboA
+                self.fboA.use()
+                vao.render(mode=moderngl.TRIANGLE_STRIP)
+
+                # # switch to screen
+                # context.screen.use()
+                # # set screen prog's tex input to loc 0
+                # self.texA.use(location=0)
+                # self.screen_prog['uTexture'].value = 0
+                # # render the screen va0
+                # self.screen_vao.render(mode=moderngl.TRIANGLE_STRIP)
+
+                _t = time.time_ns()
+                print(f"{i:03d}, {j:03d}: {(_t-time_of_last_render) / 1e6} ms")
+                if ((_t - time_of_last_render) > time_between_renders):
+                # if True:
+
+                    # t1 = time.time_ns()
+                    # context.screen.use()
+                    # # set screen prog's tex input to loc 0
+                    # self.texA.use(location=0)
+                    # self.screen_prog['uTexture'].value = 0
+                    # # render the screen va0
+                    # self.screen_vao.render(mode=moderngl.TRIANGLE_STRIP)
+                    # pygame.display.flip()
+                    # t2 = time.time_ns()
+
+                    t1 = time.time_ns()
+                    context.screen.use()
+                    self.texA.use(location=0)
+                    self.screen_prog['uTexture'].value = 0
+                    self.screen_vao.render(mode=moderngl.TRIANGLE_STRIP)
+                    t2 = time.time_ns()
+                    pygame.display.flip()
+                    t3 = time.time_ns()
+                    print(f"render: {(t2-t1)/1e6:.2f} ms | flip: {(t3-t2)/1e6:.2f} ms")
+
+
+                    print(f"render time: {(t2-t1) / 1e6} ms")
+                    time_of_last_render = _t
+                    for event in pygame.event.get():
+                        if event.type == pygame.QUIT:
+                            sys.exit()
+
+                context.finish()
+                    
+
+                self.app.clock.tick(1000)
+
+                # swap the textures at the end of rendering
+                self.fboA, self.fboB = self.fboB, self.fboA
+                self.texA, self.texB = self.texB, self.texA
+
+                pass
+
+        time.sleep(0.01)
+        gc.enable()
+
+        return
+
 
     def calculate_frame(self, scene: Scene):
 
@@ -1130,16 +1254,19 @@ class RayTracerStatic(ProgramABC):
         program["CamLocalToWorldMatrix"].write(cam.local_to_world_matrix.astype("f4"))
         program["CamGlobalPos"].write(cam.csys.pos.astype("f4"))
 
-        self.texture.use(location=1)
+        def render_full():
+            self.texB.use(location=1)
+            vao.render(mode=moderngl.TRIANGLE_STRIP)
+            render_data = context.screen.read(components=3, dtype="f1")
+            self.texB.write(render_data)
 
-        vao.render(mode=moderngl.TRIANGLE_STRIP)
+        self.calculate_frame_via_chunking(scene, flip=True)
 
-        render_data = context.screen.read(components=3, dtype="f1")
-        self.texture.write(render_data)
-
-        buffer = context.screen.read(components=3, dtype="f1")
+        # fboB is the output frame at the end of the cycle.
+        
+        buffer = self.fboB.read(components=3, dtype="f1")
+        # buffer = context.screen.read(components=3, dtype="f1")
         size = (self.width, self.height)
-        # img = functions.buffer_to_image(render_data, (self.width, self.height))
         img = functions.buffer_to_image(buffer, size)
 
         img.save(self.target_dir / f"{self.frame_counter:05}_{self.cycle_counter:05}.png")
@@ -1236,8 +1363,8 @@ def generic_camera_event_handler(
                 elif event.button == 2:
                     app.MOUSE_LAST_POS[0] = mouse_x
                     app.MOUSE_LAST_POS[1] = mouse_y
-                    app.MMB_PRESSED = False
 
+                    app.MMB_PRESSED = False
             if event.type == pygame.MOUSEWHEEL:
                 scroll = event.precise_y
 
