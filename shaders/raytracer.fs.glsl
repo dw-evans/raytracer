@@ -506,6 +506,13 @@ float schlickApproximation(float n1, float n2, float theta)
     float R0 = pow((n1 - n2) / (n1 + n2), 2);
     return R0 + (1 - R0) * pow(1 - cos(theta), 5);
 }
+float cosSchlickApproximation(float n1, float n2, float costheta)
+{
+    // function that calculates the reflection coefficient
+    // i.e. how much goes to reflection, and the rest going to refraction
+    float R0 = pow((n1 - n2) / (n1 + n2), 2);
+    return R0 + (1 - R0) * pow(1 - costheta, 5);
+}
 
 float angleRefraction(float n1, float n2, float thetai)
 {
@@ -525,6 +532,18 @@ float angleBetweenVectors(vec3 v1, vec3 v2) {
     return angle;
 }
 
+float cosAngleBetweenVectors(vec3 v1, vec3 v2) {
+    vec3 norm_v1 = normalize(v1);
+    vec3 norm_v2 = normalize(v2);
+
+    float dot_product = dot(norm_v1, norm_v2);
+
+    // clamp for fear of floating point errors
+    float cosangle = clamp(dot_product, -1.0, 1.0);
+
+    return cosangle;
+}
+
 
 vec3 traceRay(inout Ray ray, inout uint rngState)
 {
@@ -536,6 +555,10 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
     vec3 emittedLight;
     Material material;
     Material prevmaterial;
+    bool isSpecularBounce;
+    bool isTransmission;
+    vec3 mixinColor;
+    vec3 specularMixinColor;
 
     for (int i = 0; i <= MAX_BOUNCES; i++)
     {
@@ -544,11 +567,15 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
         if (hitInfo.didHit)
         {
 
-            // vec3 diffuseDir = normalize(hitInfo.normal + randomDirection(rngState));
-            // vec3 specularDir = reflect(ray.dir, hitInfo.normal);
-
             prevmaterial = ray.prevHit.material;
             material = hitInfo.material;
+
+            // handle transmission of the last hit before performing color calculations
+            vec3 transmissionColor;
+            Material transmissionMaterial = prevmaterial;
+            float attenuationCoeff = -log(transmissionMaterial.transmission);
+            transmissionColor = transmissionMaterial.color.xyz * exp(-attenuationCoeff* hitInfo.dst);
+            rayColor *= transmissionColor * transmissionMaterial.color.w;
 
             // deal with transparency by allowing some fraction of the rays to pass through
             // do no do any color modifications if it passes through.
@@ -556,12 +583,11 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
             {
                 if (randomValue(rngState) > hitInfo.material.color.w)
                 {
-                    // move the ray origin to its hit point but dont modify direction
+                    // move the ray origin to its hit point but dont modify direction, do not change ior
                     if (i == MAX_BOUNCES) { break; }
                     
                     ray.origin = hitInfo.hitPoint;
                     ray.prevHit = hitInfo;
-                    // ray.ior ... // (do not touch)
                     continue;
                 }
             }   
@@ -574,123 +600,123 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
             // +1 if hits front side
             int normalFlip = -1 * (int(hitInfo.hitBackside) * 2 - 1);
 
-            // if the hit material has any transmission, test for refraction
-            // else only reflect
-            if (material.transmission > 1e-6)
-            {
-                float n1;
-                float n2;
-                float eta;
+            float n1;
+            float n2;
+            float eta;
 
-                // if we hit the backside and were in solid, we are interfacting with atmosphere.
-                if (ray.inSolid && hitInfo.hitBackside) {
-                    n2 = atmosphereMaterial.ior;
-                // if not, we are interfacing with the material hit
-                } else {
-                    n2 = material.ior;
-                }
-
-                n1 = ray.ior; // ior of the material the ray is in
-                // float n2 = material.ior; // ior of the second material
-                eta = n1 / n2;
-
-                // technically there is a -1 * -1, I think? 
-                specularDir = refract(ray.dir, normalFlip * hitInfo.normal, eta);
-                // specularDir = refract(ray.dir, -1 * hitInfo.normal, eta);
-
-                if (specularDir == vec3(0.0))
-                {
-                    // change to reflect
-
-                    // it reflects and picks up the material color
-                    specularDir = reflect(ray.dir, hitInfo.normal);
-                    diffuseDir = normalize(normalFlip * hitInfo.normal + randomDirection(rngState));
-                    rayColor *= material.color.xyz;
-                    // ray.ior = ray.ior;
-                    
-                } else {
-                    float theta = angleBetweenVectors(-1 * normalFlip * hitInfo.normal, specularDir);
-                    float shlickRatio = schlickApproximation(n1, n2, theta);
-                    
-                    // if greater than the shlickRatio, it refracts successfully
-                    if (randomValue(rngState) > shlickRatio)
-                    // if (true)
-                    {
-                        // it refracts successfully
-                        vec3 transmissionColor;
-                        // Material transmissionMaterial = ray.prevHit.material;
-                        Material transmissionMaterial = prevmaterial;
-                        float attenuationCoeff = -log(transmissionMaterial.transmission);
-                        transmissionColor = 
-                        transmissionMaterial.color.xyz * exp(-attenuationCoeff* hitInfo.dst)
-                        ;
-                        // multiply it by the transmission color before doing the other calculations
-                        rayColor *= transmissionColor * transmissionMaterial.color.w;
-
-                        diffuseDir = normalize(-1 * normalFlip * hitInfo.normal + randomDirection(rngState));
-                        
-                        // if it hits the back side, we must assume it is refracting out into atmosphere
-                        if (hitInfo.hitBackside)
-                        {
-                            // exiting the material to atmosphere
-                            rayColor *= atmosphereMaterial.color.xyz;
-                            ray.inSolid = false;
-                            ray.ior = atmosphereMaterial.ior; // change the ior to atmosphere
-                            // specularDir = vec3(0.0, -1.0, 0.0);
-                            // specularDir = refract(ray.dir, normalFlip * hitInfo.normal, n2/n1);
-                            
-                        // if it refracts off the outside surface, it is entering the material
-                        } else
-                        { 
-                            // entering the material, mix in some color
-                            rayColor *= material.color.xyz;
-                            ray.inSolid = true;
-                            ray.ior = material.ior; // change the ior to the new material
-                        }
-
-                    // if less than shlick, it is reflecting
-                    } else
-                    {
-                        // if the ray is already within a solid, reflecting within a solid keeps it within a solid
-                        if (ray.inSolid) {
-                            ray.inSolid = true;
-                            // ray.ior = ray.ior; // do not change
-
-                        // if the ray is not in a solid, reflecting keeps it outside a solid.
-                        } else {
-                            ray.inSolid = false;
-                            // ray.ior = ray.ior; // do not change
-                        }
-                        // it reflects and picks up the material color
-                        specularDir = reflect(ray.dir, hitInfo.normal);
-                        diffuseDir = normalize(normalFlip * hitInfo.normal + randomDirection(rngState));
-                        rayColor *= material.color.xyz;
-                    }
-                 }
-
-            } else
-            {
-                // if the ray is already within a solid, reflecting within a solid keeps it within a solid
-                if (ray.inSolid) {
-                    ray.inSolid = true;
-                    // ray.ior = ray.ior; // do not change
-
-                // if the ray is not in a solid, reflecting keeps it outside a solid.
-                } else {
-                    ray.inSolid = false;
-                    // ray.ior = ray.ior; // do not change
-                }
-                // it reflects and picks up the material color
-                specularDir = reflect(ray.dir, hitInfo.normal);
-                diffuseDir = normalize(normalFlip * hitInfo.normal + randomDirection(rngState));
-                rayColor *= material.color.xyz;
+            // if we hit the backside and were in solid, we are interfacting with atmosphere.
+            if (ray.inSolid && hitInfo.hitBackside) {
+                n2 = atmosphereMaterial.ior;
+            // if not, we are interfacing with the material hit
+            } else {
+                n2 = material.ior;
             }
 
-            // move the ray origin to its hit point
+            n1 = ray.ior; // ior of the material the ray is in
+            eta = n1 / n2;
+
+            // technically there is a -1 * -1, I think? 
+            specularDir = refract(ray.dir, normalFlip * hitInfo.normal, eta);
+
+            // float costheta = cosAngleBetweenVectors(-1 * normalFlip * hitInfo.normal, specularDir);
+            float costheta = cosAngleBetweenVectors(normalFlip * hitInfo.normal, -ray.dir);
+            float shlickRatio = cosSchlickApproximation(n1, n2, costheta);
+
+            // float theta = angleBetweenVectors(-1 * normalFlip * hitInfo.normal, specularDir);
+            // float shlickRatio = schlickApproximation(n1, n2, theta);
+
+            // if greater than the shlickRatio, it refracts successfully and enters the material
+            // refraction of non-transmission will be a diffuse reflection
+            if (randomValue(rngState) > shlickRatio)
+            {
+                isSpecularBounce = false;
+
+                if (randomValue(rngState) < material.transmission)
+                {
+                    // the ray transmits through the material, i.e. transmissive material refraction
+                    isTransmission = true;
+                }
+                else
+                {
+                    // the ray does not transmit, invert the normal in preparation for diffuse reflection
+                    normalFlip *= -1;
+                }
+
+                // on transmissive refraction into the material, the diffuse dir will enter the material...?
+                diffuseDir = normalize(-1 * normalFlip * hitInfo.normal + randomDirection(rngState));
+
+                if (isTransmission) 
+                {
+                    // if it hits the back side, we must assume it is refracting out into atmosphere
+                    if (hitInfo.hitBackside)
+                    {
+                        mixinColor = atmosphereMaterial.color.xyz;
+                        ray.inSolid = false;
+                        ray.ior = atmosphereMaterial.ior;
+                    } 
+                    // if it refracts off an outside surface, it is entering the material
+                    else
+                    { 
+                        mixinColor = material.color.xyz;
+                        ray.inSolid = true;
+                        ray.ior = material.ior;
+                    }
+                }
+                else
+                {
+                    // diffuse reflection off the back side of a surface
+                    // if it hits the back side, we must assume it is diffusely reflecting internally
+                    if (hitInfo.hitBackside)
+                    {
+                        mixinColor = material.color.xyz;
+                        ray.inSolid = true;
+                        ray.ior = material.ior;
+                    } 
+                    // if it hits the front side, it is plain diffuse reflection. maintain ray.inSolid and ior.
+                    else
+                    { 
+                        mixinColor = material.color.xyz;
+                    }
+                }
+
+            } 
+            // if less than shlick, it is a specular bounce off the surface
+            else
+            {
+                isSpecularBounce = true;
+                // if the ray is already within a solid, reflecting within a solid keeps it within a solid do not change ior
+                if (ray.inSolid) {
+                    ray.inSolid = true;
+
+                // if the ray is not in a solid, reflecting keeps it outside a solid. do not change ior
+                } else {
+                    ray.inSolid = false;
+                }
+
+                // it reflects and picks up the material color
+                specularDir = reflect(ray.dir, hitInfo.normal);
+                // rayColor *= material.color.xyz;
+            }
+
             if (i == MAX_BOUNCES) { break; }
 
+            // move the ray origin to its hit point
             ray.origin = hitInfo.hitPoint;
-            ray.dir = mix(diffuseDir, specularDir, material.smoothness);
+
+            // if specular, perform a specular bounce
+            if (isSpecularBounce)
+            {
+                ray.dir = specularDir;
+                specularMixinColor = vec3(1.0);
+                rayColor *= specularMixinColor;
+            }
+            // mix between diffuse and specular directions based on material smoothness
+            else
+            {
+                ray.dir = mix(diffuseDir, specularDir, material.smoothness);
+                rayColor *= mixinColor;
+            }
+
             ray.prevHit = hitInfo;
 
         } else 
