@@ -50,10 +50,10 @@ from typing import Generator
 
 # from scripts.scenes import basic_scene
 # from scripts.scenes import animated_scene
-from scripts.scenes import numba_test_scene
-# from scripts.scenes import final_scene_numba
+# from scripts.scenes import numba_test_scene
+from scripts.scenes import final_scene_numba
 
-scn = numba_test_scene
+scn = final_scene_numba
 
 from pathlib import Path
 import datetime
@@ -70,7 +70,7 @@ from watchdog.events import FileSystemEventHandler
 # MAX_TRIANGLES_TO_LOAD = 1_000
 
 
-def check_for_errors(ctx:moderngl.Context):
+def check_for_errors(ctx: moderngl.Context):
     error = ctx.error
     if error:
         print(f"OpenGL Error: {error}")
@@ -83,14 +83,14 @@ class Application:
     ) -> None:
         # window params
 
-        factor = 1
+        factor = 4
         self.DYNAMIC_RENDER_FRAMERATE = 24
         self.WINDOW_HEIGHT = 1080 // factor
         # self.WINDOW_HEIGHT = 1440 // 8
         self.ASPECT_RATIO = 16 / 9
 
-        self.CHUNKSX = 8 * factor
-        self.CHUNKSY = 8 * factor
+        self.CHUNKSX = 8 // factor
+        self.CHUNKSY = 8 // factor
 
         # mouse / keyboard movement camera speeds
         self.CAMERA_LINEAR_SPEED = 3.0
@@ -114,7 +114,6 @@ class Application:
         self.MOUSE_LAST_POS: list[float] = [0, 0]
         self.MMB_PRESSED: bool = False
 
-
         pygame.init()
 
         self.screen = pygame.display.set_mode(
@@ -122,22 +121,16 @@ class Application:
             pygame.OPENGL | pygame.DOUBLEBUF,
         )
         pygame.display.gl_set_attribute(pygame.GL_SWAP_CONTROL, 0)
-        pygame.display.gl_set_attribute(pygame.GL_CONTEXT_FLAGS, pygame.GL_CONTEXT_DEBUG_FLAG)
+        pygame.display.gl_set_attribute(
+            pygame.GL_CONTEXT_FLAGS, pygame.GL_CONTEXT_DEBUG_FLAG
+        )
 
         self.clock = pygame.time.Clock()
-        # self.display_scene = basic_scene.scene
-        # self.display_scene = basic_scene.scene2
-        # self.display_scene = basic_scene.scene3
-        # self.display_scene = basic_scene.scene
-        # self.display_scene = animated_scene.scene
-        # self.display_scene = numba_test_scene.scene
         self.display_scene = scn.scene
 
         self.display_scene.validate_mesh_indices()
 
         self.display_scene.cam.fov = 30
-        # self.display_scene.cam.csys.pos = np.array([0, 2, -2])
-        # self.display_scene.cam.csys.rxg(-20)
 
         self.register_program(
             DefaultShaderProgram(
@@ -177,16 +170,21 @@ class Application:
         self.reset_anim_key_pressed = False
         self.pause_play_anim_key_pressed = False
         self.frame_counter = 0
-        self.export_directory = Path() / "renders/application" / f"{datetime.datetime.now().strftime("%Y.%m.%d_%H%M%S")}"
+        self.export_directory = (
+            Path()
+            / "renders/application"
+            / f"{datetime.datetime.now().strftime("%Y.%m.%d_%H%M%S")}"
+        )
         self.export_directory.mkdir(parents=True)
 
-
-        self.watchdog:threading.Thread = threading.Thread(target=self.run_file_watchdog)
-        self.watchdog_command:callable = lambda: None
+        self.watchdog: threading.Thread = threading.Thread(
+            target=self.run_file_watchdog
+        )
+        self.watchdog_command: callable = lambda: None
         self.watchdog_command_waiting = False
         self.watchdog_is_running = False
 
-        self.display_program = self.programs["raytracer_static"]
+        # self.display_program = self.programs["raytracer_static"]
 
     def start(self):
         self.running = True
@@ -256,7 +254,6 @@ class Application:
                 self.watchdog_command_waiting = False
                 self.watchdog_command.__call__()
                 pass
-
 
             options = {
                 "app": self,
@@ -331,16 +328,14 @@ class Application:
             self.display_program.configure_program(self.display_scene)
             self.animation_clock = self.animation_clock + self.dt
 
-
-
     class ShaderHandler(FileSystemEventHandler):
-        def __init__(self, app:Application):
+        def __init__(self, app: Application):
             self.app = app
-            
+
         def on_modified(self, event):
             # This method is called when a file is modified
             if not self.app.watchdog_command_waiting and not event.is_directory:
-                print(f'File modified: {event.src_path}, reloading shaders')
+                print(f"File modified: {event.src_path}, reloading shaders")
                 self.out_fn_waiting = True
                 # func = lambda: self.app.run()
 
@@ -350,8 +345,12 @@ class Application:
                         self.app.display_program.initialise()
                         print("Shaders reloaded.")
                     except Exception as e:
-                        print(f"Error during shader reloading. Check for errors: \n\n{e}\n")
-                    self.app.display_program.configure_program(scene=self.app.display_scene)
+                        print(
+                            f"Error during shader reloading. Check for errors: \n\n{e}\n"
+                        )
+                    self.app.display_program.configure_program(
+                        scene=self.app.display_scene
+                    )
                     print("Reloading Scene")
                     # importlib.reload(numba_test_scene)
                     # self.app.display_scene = numba_test_scene.scene
@@ -370,7 +369,7 @@ class Application:
         path = "shaders"
         observer.schedule(event_handler, path, recursive=False)
         observer.start()
-        print(f'Started watching {path} for modifications.')
+        print(f"Started watching {path} for modifications.")
 
         try:
             while True:
@@ -378,7 +377,6 @@ class Application:
         except KeyboardInterrupt:
             observer.stop()
         observer.join()
-
 
 
 class ProgramABC(ABC):
@@ -404,8 +402,6 @@ class ProgramABC(ABC):
 
     vertices: np.ndarray
     standalone: bool
-
-
 
     def __init__(
         self,
@@ -454,7 +450,7 @@ class ProgramABC(ABC):
         self.reload_shaders()
 
         pass
-        # memory leak happens here with the raytracer 
+        # memory leak happens here with the raytracer
         self.program = self.context.program(
             vertex_shader=self.vertex_shader,
             fragment_shader=self.fragment_shader,
@@ -552,10 +548,11 @@ class DefaultShaderProgram(ProgramABC):
 
         program["selectedMeshId"].write(struct.pack("i", -1))
 
-
         print(f"Updating Triangle Positions...")
         # numba_scripts.classes.update_triangles_to_csys(triangles, scene.meshes[0].csys)
-        timer(numba_scripts.classes.update_triangles_to_csys)(triangles, scene.meshes[0].csys)
+        timer(numba_scripts.classes.update_triangles_to_csys)(
+            triangles, scene.meshes[0].csys
+        )
 
         print(f"Loading triangles into SSBO...")
         # triangle_data = numba_scripts.classes.triangles_to_array(triangles)
@@ -607,7 +604,7 @@ class DefaultShaderProgram(ProgramABC):
         #     MODIFY_COMMAND()
 
         vao.render(mode=moderngl.TRIANGLE_STRIP)
-        
+
         context.gc()
 
     def handle_event(
@@ -748,12 +745,52 @@ class RayTracerDynamic(ProgramABC):
         spheres = scene.spheres
         context = self.context
 
+        vertices = np.array(
+            [
+                # x, y, u, v
+                -1.0,
+                -1.0,
+                0.0,
+                0.0,
+                1.0,
+                -1.0,
+                1.0,
+                0.0,
+                -1.0,
+                1.0,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+            ],
+            dtype="f4",
+        )
 
+        with open("shaders/toScreen.fs.glsl") as f:
+            fs = f.read()
+        with open("shaders/toScreen.vs.glsl") as f:
+            vs = f.read()
 
+        self.screen_prog = self.context.program(
+            vertex_shader=vs,
+            fragment_shader=fs,
+        )
+
+        self.screen_vbo = context.buffer(vertices.tobytes())
+        self.screen_vao = context.simple_vertex_array(
+            self.screen_prog, self.screen_vbo, "in_pos", "in_uv"
+        )
+
+        self.texA = self.context.texture((self.width, self.height), 3)
+        self.texA.use(location=0)
+
+        # self.fbo = context.framebuffer(color_attachments=[self.texA])
         self.texB = self.context.texture((self.width, self.height), 3)
-        self.texB.use(location=1)
-        self.program["previousFrame"] = 1
 
+        self.fboA = context.framebuffer(color_attachments=[self.texA])
+        self.fboB = context.framebuffer(color_attachments=[self.texB])
 
         self.frame_counter = 0
         self.cycle_counter = 0
@@ -774,7 +811,7 @@ class RayTracerDynamic(ProgramABC):
         # program["screenHeight"].write(struct.pack("i", self.height))
 
         program["spheresCount"].write(struct.pack("i", len(spheres)))
-        
+
         sphere_buffer_binding = 1
         program["sphereBuffer"].binding = sphere_buffer_binding
         sphere_bytes = functions.iter_to_bytes(spheres)
@@ -790,7 +827,9 @@ class RayTracerDynamic(ProgramABC):
 
         print(f"Updating Triangle Positions...")
         # numba_scripts.classes.update_triangles_to_csys(triangles, scene.meshes[0].csys)
-        timer(numba_scripts.classes.update_triangles_to_csys)(triangles, scene.meshes[0].csys)
+        timer(numba_scripts.classes.update_triangles_to_csys)(
+            triangles, scene.meshes[0].csys
+        )
 
         print(f"Loading triangles into SSBO...")
         # triangle_data = numba_scripts.classes.triangles_to_array(triangles)
@@ -819,7 +858,67 @@ class RayTracerDynamic(ProgramABC):
         program["materialBuffer"].binding = material_buffer_binding
         material_buffer.bind_to_uniform_block(material_buffer_binding)
 
-        program
+        # program["chunksx"].write(struct.pack("i", self.app.CHUNKSX))
+        # program["chunksy"].write(struct.pack("i", self.app.CHUNKSY))
+        program["chunksx"].write(struct.pack("i", 1))
+        program["chunksy"].write(struct.pack("i", 1))
+
+    def calculate_frame_via_chunking(self, scene: Scene, flip: bool = True):
+        import gc
+
+        gc.disable()
+        vao = self.vao
+        program = self.program
+        context = self.context
+        cam = scene.cam
+
+        time_of_last_render = time.time_ns()
+        time_between_renders = 1 / 144 * 1e9
+        _t = time_of_last_render
+
+        for i in range(self.app.CHUNKSX):
+            for j in range(self.app.CHUNKSY):
+                program["chunkx"].write(struct.pack("i", i))
+                program["chunky"].write(struct.pack("i", j))
+
+                # use texB as the previous frame sampler
+                self.texB.use(location=1)
+                # render to fboA
+                self.fboA.use()
+                vao.render(mode=moderngl.TRIANGLE_STRIP)
+
+                _t = time.time_ns()
+                print(f"{i:03d}, {j:03d}: {(_t-time_of_last_render) / 1e6} ms")
+                if (_t - time_of_last_render) > time_between_renders:
+                    t1 = time.time_ns()
+                    context.screen.use()
+                    self.texA.use(location=0)
+                    self.screen_prog["uTexture"].value = 0
+                    self.screen_vao.render(mode=moderngl.TRIANGLE_STRIP)
+                    t2 = time.time_ns()
+                    pygame.display.flip()
+                    t3 = time.time_ns()
+                    print(f"render: {(t2-t1)/1e6:.2f} ms | flip: {(t3-t2)/1e6:.2f} ms")
+                    print(f"render time: {(t2-t1) / 1e6} ms")
+                    time_of_last_render = _t
+                    for event in pygame.event.get():
+                        if event.type == pygame.QUIT:
+                            sys.exit()
+
+                context.finish()
+
+                self.app.clock.tick(1000)
+
+                # swap the textures at the end of rendering
+                self.fboA, self.fboB = self.fboB, self.fboA
+                self.texA, self.texB = self.texB, self.texA
+
+                pass
+
+        time.sleep(0.01)
+        gc.enable()
+
+        return
 
     def calculate_frame(self, scene: Scene):
 
@@ -851,13 +950,26 @@ class RayTracerDynamic(ProgramABC):
         program["CamLocalToWorldMatrix"].write(cam.local_to_world_matrix.astype("f4"))
         program["CamGlobalPos"].write(cam.csys.pos.astype("f4"))
 
-
         self.texB.use(location=1)
+        self.fboA.use()
+        self.vao.render(mode=moderngl.TRIANGLE_STRIP)
 
-        vao.render(mode=moderngl.TRIANGLE_STRIP)
 
-        render_data = context.screen.read(components=3, dtype="f1")
-        self.texB.write(render_data)
+        self.context.screen.use()
+        self.texA.use(location=0)
+        self.screen_prog["uTexture"].value = 0
+        self.screen_vao.render(mode=moderngl.TRIANGLE_STRIP)
+
+        self.fboA, self.fboB = self.fboB, self.fboA
+        self.texA, self.texB = self.texB, self.texA
+
+        pygame.display.flip()
+        print("here")
+
+        # self.calculate_frame_via_chunking(scene)
+
+        # render_data = context.screen.read(components=3, dtype="f1")
+        # self.texB.write(render_data)
 
         if self.is_scene_static:
             self.cycle_counter += 1
@@ -866,7 +978,6 @@ class RayTracerDynamic(ProgramABC):
             self.cycle_counter = 0
             program["frameNumber"].write(struct.pack("I", 0))
             pass
-
 
         self.shader_rng_counter += 1
 
@@ -1005,6 +1116,7 @@ class RayTracerDynamic(ProgramABC):
 
                 pass
 
+
 class RayTracerStatic(ProgramABC):
     name = "raytracer_static"
 
@@ -1027,8 +1139,8 @@ class RayTracerStatic(ProgramABC):
             standalone,
             require,
         )
-        self.MAX_RAY_BOUNCES = 16
-        self.RAYS_PER_PIXEL = 1
+        self.MAX_RAY_BOUNCES = 6
+        self.RAYS_PER_PIXEL = 4
         self.CYCLES_PER_FRAME = 1
 
         self.sphere_buffer_binding = 1
@@ -1040,13 +1152,28 @@ class RayTracerStatic(ProgramABC):
         spheres = scene.spheres
         context = self.context
 
-        vertices = np.array([
-            # x, y, u, v
-            -1.0, -1.0, 0.0, 0.0,
-            1.0, -1.0, 1.0, 0.0,
-            -1.0,  1.0, 0.0, 1.0,
-            1.0,  1.0, 1.0, 1.0,
-        ], dtype='f4')
+        vertices = np.array(
+            [
+                # x, y, u, v
+                -1.0,
+                -1.0,
+                0.0,
+                0.0,
+                1.0,
+                -1.0,
+                1.0,
+                0.0,
+                -1.0,
+                1.0,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+            ],
+            dtype="f4",
+        )
 
         with open("shaders/toScreen.fs.glsl") as f:
             fs = f.read()
@@ -1059,8 +1186,9 @@ class RayTracerStatic(ProgramABC):
         )
 
         self.screen_vbo = context.buffer(vertices.tobytes())
-        self.screen_vao = context.simple_vertex_array(self.screen_prog, self.screen_vbo, 'in_pos', 'in_uv')
-
+        self.screen_vao = context.simple_vertex_array(
+            self.screen_prog, self.screen_vbo, "in_pos", "in_uv"
+        )
 
         self.texA = self.context.texture((self.width, self.height), 3)
         self.texA.use(location=0)
@@ -1068,14 +1196,17 @@ class RayTracerStatic(ProgramABC):
         # self.fbo = context.framebuffer(color_attachments=[self.texA])
         self.texB = self.context.texture((self.width, self.height), 3)
 
-
         self.fboA = context.framebuffer(color_attachments=[self.texA])
         self.fboB = context.framebuffer(color_attachments=[self.texB])
 
         self.frame_counter = 0
         self.cycle_counter = 0
         self.shader_rng_counter = 0
-        self.target_dir = Path() / "renders/RayTracerStatic" / f"{datetime.datetime.now().strftime("%Y.%m.%d_%H%M%S")}"
+        self.target_dir = (
+            Path()
+            / "renders/RayTracerStatic"
+            / f"{datetime.datetime.now().strftime("%Y.%m.%d_%H%M%S")}"
+        )
         self.target_dir.mkdir(parents=True)
 
         program["STATIC_RENDER"].write(struct.pack("i", True))
@@ -1092,7 +1223,7 @@ class RayTracerStatic(ProgramABC):
         # program["screenHeight"].write(struct.pack("i", self.height))
 
         program["spheresCount"].write(struct.pack("i", len(spheres)))
-        
+
         sphere_buffer_binding = 1
         program["sphereBuffer"].binding = sphere_buffer_binding
         sphere_bytes = functions.iter_to_bytes(spheres)
@@ -1108,7 +1239,9 @@ class RayTracerStatic(ProgramABC):
 
         print(f"Updating Triangle Positions...")
         # numba_scripts.classes.update_triangles_to_csys(triangles, scene.meshes[0].csys)
-        timer(numba_scripts.classes.update_triangles_to_csys)(triangles, scene.meshes[0].csys)
+        timer(numba_scripts.classes.update_triangles_to_csys)(
+            triangles, scene.meshes[0].csys
+        )
 
         print(f"Loading triangles into SSBO...")
         # triangle_data = numba_scripts.classes.triangles_to_array(triangles)
@@ -1140,10 +1273,9 @@ class RayTracerStatic(ProgramABC):
         program["chunksx"].write(struct.pack("i", self.app.CHUNKSX))
         program["chunksy"].write(struct.pack("i", self.app.CHUNKSY))
 
-
-
-    def calculate_frame_via_chunking(self, scene:Scene, flip:bool=True):
+    def calculate_frame_via_chunking(self, scene: Scene, flip: bool = True):
         import gc
+
         gc.disable()
         vao = self.vao
         program = self.program
@@ -1151,7 +1283,7 @@ class RayTracerStatic(ProgramABC):
         cam = scene.cam
 
         time_of_last_render = time.time_ns()
-        time_between_renders = 1/144 * 1e9
+        time_between_renders = 1 / 144 * 1e9
         _t = time_of_last_render
 
         for i in range(self.app.CHUNKSX):
@@ -1175,8 +1307,8 @@ class RayTracerStatic(ProgramABC):
 
                 _t = time.time_ns()
                 print(f"{i:03d}, {j:03d}: {(_t-time_of_last_render) / 1e6} ms")
-                if ((_t - time_of_last_render) > time_between_renders):
-                # if True:
+                if (_t - time_of_last_render) > time_between_renders:
+                    # if True:
 
                     # t1 = time.time_ns()
                     # context.screen.use()
@@ -1191,13 +1323,12 @@ class RayTracerStatic(ProgramABC):
                     t1 = time.time_ns()
                     context.screen.use()
                     self.texA.use(location=0)
-                    self.screen_prog['uTexture'].value = 0
+                    self.screen_prog["uTexture"].value = 0
                     self.screen_vao.render(mode=moderngl.TRIANGLE_STRIP)
                     t2 = time.time_ns()
                     pygame.display.flip()
                     t3 = time.time_ns()
                     print(f"render: {(t2-t1)/1e6:.2f} ms | flip: {(t3-t2)/1e6:.2f} ms")
-
 
                     print(f"render time: {(t2-t1) / 1e6} ms")
                     time_of_last_render = _t
@@ -1206,7 +1337,6 @@ class RayTracerStatic(ProgramABC):
                             sys.exit()
 
                 context.finish()
-                    
 
                 self.app.clock.tick(1000)
 
@@ -1220,7 +1350,6 @@ class RayTracerStatic(ProgramABC):
         gc.enable()
 
         return
-
 
     def calculate_frame(self, scene: Scene):
 
@@ -1245,7 +1374,7 @@ class RayTracerStatic(ProgramABC):
         program["depthOfFieldStrength"].write(
             struct.pack("f", CAM_DEPTH_OF_FIELD_STRENGTH),
         )
-        CAM_ANTIALIAS_STRENGTH = 0.000003
+        CAM_ANTIALIAS_STRENGTH = 0.001
         program["antialiasStrength"].write(
             struct.pack("f", CAM_ANTIALIAS_STRENGTH),
         )
@@ -1263,13 +1392,15 @@ class RayTracerStatic(ProgramABC):
         self.calculate_frame_via_chunking(scene, flip=True)
 
         # fboB is the output frame at the end of the cycle.
-        
+
         buffer = self.fboB.read(components=3, dtype="f1")
         # buffer = context.screen.read(components=3, dtype="f1")
         size = (self.width, self.height)
         img = functions.buffer_to_image(buffer, size)
 
-        img.save(self.target_dir / f"{self.frame_counter:05}_{self.cycle_counter:05}.png")
+        img.save(
+            self.target_dir / f"{self.frame_counter:05}_{self.cycle_counter:05}.png"
+        )
 
         if self.cycle_counter >= self.CYCLES_PER_FRAME:
             self.app.save_frame_and_animate_next()
@@ -1280,10 +1411,16 @@ class RayTracerStatic(ProgramABC):
 
         self.context.gc()
 
-    def handle_event(self, event, app: Application, cam: Camera, scene: Scene, keyboard_enabled: bool, mouse_enabled: bool):
+    def handle_event(
+        self,
+        event,
+        app: Application,
+        cam: Camera,
+        scene: Scene,
+        keyboard_enabled: bool,
+        mouse_enabled: bool,
+    ):
         pass
-
-
 
 
 def generic_camera_event_handler(

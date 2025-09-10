@@ -613,8 +613,8 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
                     float shlickRatio = schlickApproximation(n1, n2, theta);
                     
                     // if greater than the shlickRatio, it refracts successfully
-                    // if (randomValue(rngState) > shlickRatio)
-                    if (true)
+                    if (randomValue(rngState) > shlickRatio)
+                    // if (true)
                     {
                         // it refracts successfully
                         vec3 transmissionColor;

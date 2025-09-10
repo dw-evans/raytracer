@@ -18,7 +18,9 @@ from pyrr import (
 
 from pathlib import Path
 
-
+import trimesh
+import numpy as np
+import numba_scripts.classes
 
 
 material_red = Material(
@@ -73,10 +75,6 @@ material_light_source_1 = Material(
     emissionStrength=4.0,
 )
 
-
-scene = Scene()
-
-
 glass_material = Material(
     color=Vector4((1.0, 0.9, 0.9, 1.0)),
     smoothness=1.0,
@@ -85,35 +83,17 @@ glass_material = Material(
 )
 
 atmosphere_material = Material(
-    Vector4(
-        (
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-        ),
-        dtype="f4",
-    ),
+    Vector4((1.0,1.0, 1.0, 1.0),  dtype="f4"),
     transmission=1.0,
     ior=1.0,
 )
 
-import trimesh
-import numpy as np
-import numba_scripts.classes
-
+scene = Scene()
 scene.atmosphere_material = atmosphere_material
-
 
 meshes = []
 
 
-material_subject = Material(
-    color=Vector4((1.0, 0.3, 1.0, 1.0)),
-    smoothness=1.0,
-    transmission=0.6,
-    ior=1.6,
-)
 material_subject = Material(
     color=Vector4((1.0, 0.3, 0.6, 1.0)),
     smoothness=1.0,
@@ -122,24 +102,21 @@ material_subject = Material(
 )
 
 load_data = [
-    ("objects/final_scene/wall_left.obj", material_red_passthrough),
-    ("objects/final_scene/wall_right.obj", material_green_passthrough),
-    # ("objects/final_scene/wall_top.obj", material_white_passthrough),
-    ("objects/final_scene/wall_bottom.obj", material_white_passthrough),
-    ("objects/final_scene/wall_front.obj", material_blue_passthrough),
-    ("objects/final_scene/wall_back.obj", material_white_passthrough),
-    ("objects/final_scene/light.obj", material_light_source_1),
-    # ("objects/final_scene/subject.obj", material_subject),
-    ("objects/heart.obj", material_subject),
+    ("objects/old/final_scene/wall_left.obj", material_red_passthrough),
+    ("objects/old/final_scene/wall_right.obj", material_green_passthrough),
+    # ("objects/old/final_scene/wall_top.obj", material_white_passthrough),
+    ("objects/old/final_scene/wall_bottom.obj", material_white_passthrough),
+    ("objects/old/final_scene/wall_front.obj", material_blue_passthrough),
+    ("objects/old/final_scene/wall_back.obj", material_white_passthrough),
+    ("objects/old/final_scene/light.obj", material_light_source_1),
+    # ("objects/old/final_scene/subject.obj", material_subject),
+    ("objects/old/heart.obj", material_subject),
 
 ]
 
 car_csys = numba_scripts.classes.Csys()
 car_csys._pos = np.array([0.0, 1.0, 8.0], dtype=np.float32)
-# car_csys.ryg(180-45)
 car_csys.ryg(180)
-# car_csys.ryg(135)
-# car_csys.rxg(45)
 
 scene.cam.csys.pos = pyrr.Vector3([0.0, 2.0, 0.0])
 
@@ -169,36 +146,3 @@ for (i, (f, material)) in enumerate(load_data):
     scene.meshes.append(msh1)
 
 print(f"There are `{scene.count_triangles()}` triangles in the scene.")
-
-# from ..animate import Animation
-# from math import sin, cos, tan, pi
-
-# import numba_scripts.classes
-# def mesh_csys_animate(obj: numba_scripts.classes.Csys, t):
-#     obj.pos[0] = 0.0 + 10.0 * sin(t / 2)
-#     obj.pos[1] = -0.5
-#     obj.pos[2] = 6.0 + 5.0 * sin(t / 3)
-
-
-# def camera_csys_animate(obj: Csys, t):
-#     # view_mat = Matrix44(
-#     #     pyrr.matrix44.create_look_at(obj.pos, msh1.csys.pos, Vector3((0.0, 1.0, 0.0)))
-#     # )
-
-#     # eye = Vector3((0.0, 0.0, 0.0))
-#     # target = obj.pos - msh1.csys.pos
-#     # up = Vector3((0.0, 1.0, 0.0))
-
-#     # view_mat = Matrix44(pyrr.matrix44.create_look_at(eye, target, up))
-
-#     z_axis = (msh1.csys.pos - obj.pos).normalised
-#     x_axis = Vector3((0.0, 1.0, 0.0)).cross(z_axis)
-#     y_axis = z_axis.cross(x_axis)
-
-#     obj.quat.xyzw = pyrr.quaternion.create_from_matrix(
-#         Matrix33((x_axis, y_axis, z_axis))
-#     )
-
-
-# scene.animations.append(Animation(msh1.csys, mesh_csys_animate))
-# scene.animations.append(Animation(scene.cam.csys, camera_csys_animate))
