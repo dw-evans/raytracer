@@ -26,64 +26,65 @@ import numba_scripts.classes
 material_red = Material(
     Vector4((1.0, 0.0, 0.0, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
-    smoothness=0.1,
+    smoothness=0.0,
 )
 material_blue = Material(
     Vector4((0.0, 0.0, 1.0, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
-    smoothness=0.1,
+    smoothness=0.0,
 )
 material_green = Material(
     Vector4((0.0, 1.0, 0.0, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
-    smoothness=0.1,
+    smoothness=0.0,
 )
 material_white = Material(
     Vector4((1.0, 0, 0, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
-    smoothness=0.1,
+    smoothness=0.0,
 )
 
 material_red_passthrough = Material(
     Vector4((1.0, 0.0, 0.0, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
-    smoothness=0.1,
+    smoothness=0.0,
     transparent_from_behind=True
 )
 material_blue_passthrough = Material(
     Vector4((0.0, 0.0, 1.0, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
-    smoothness=0.1,
+    smoothness=0.0,
     transparent_from_behind=True
 )
 material_green_passthrough = Material(
     Vector4((0.0, 1.0, 0.0, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
-    smoothness=0.1,
+    smoothness=0.0,
     transparent_from_behind=True
 )
 material_white_passthrough = Material(
     Vector4((1.0, 1.0, 1.0, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
-    smoothness=0.1,
+    smoothness=0.0,
+    ior=1.0,
     transparent_from_behind=True
 )
 
 material_light_source_1 = Material(
     Vector4((0.0, 0.0, 0.0, 1.0), dtype="f4"),
-    emissionColor=Vector3((1, 1, 1), dtype="f4"),
+    emissionColor=Vector3((1, 1.0, 1), dtype="f4"),
     emissionStrength=4.0,
 )
 
 glass_material = Material(
     color=Vector4((1.0, 0.9, 0.9, 1.0)),
     smoothness=1.0,
-    transmission=0.9,
+    transmission=0.0,
     ior=1.6,
 )
 
 atmosphere_material = Material(
-    Vector4((1.0,1.0, 1.0, 1.0),  dtype="f4"),
+    Vector4((0.5, 0.5, 0.5, 1.0),  dtype="f4"),
     transmission=1.0,
     ior=1.0,
 )
@@ -97,26 +98,52 @@ meshes = []
 material_subject = Material(
     color=Vector4((1.0, 0.3, 0.6, 1.0)),
     smoothness=1.0,
-    transmission=0.9,
+    transmission=0.0,
     ior=1.6,
 )
 
 load_data = [
     ("objects/old/final_scene/wall_left.obj", material_red_passthrough),
     ("objects/old/final_scene/wall_right.obj", material_green_passthrough),
-    # ("objects/old/final_scene/wall_top.obj", material_white_passthrough),
+    ("objects/old/final_scene/wall_top.obj", material_white_passthrough),
     ("objects/old/final_scene/wall_bottom.obj", material_white_passthrough),
     ("objects/old/final_scene/wall_front.obj", material_blue_passthrough),
-    ("objects/old/final_scene/wall_back.obj", material_white_passthrough),
+    ("objects/old/final_scene/wall_back.obj", material_blue_passthrough),
     ("objects/old/final_scene/light.obj", material_light_source_1),
     # ("objects/old/final_scene/subject.obj", material_subject),
-    ("objects/old/heart.obj", material_subject),
+    # ("objects/old/heart.obj", material_subject),
 
 ]
+
+material_red_1 = Material(
+    Vector4((1.0, 1.0, 1.0, 1.0), dtype="f4"),
+    Vector3((0.0, 0.0, 0.0), dtype="f4"),
+    smoothness=1.0,
+    ior=1.0,
+)
+
+# material_red_2 = Material(
+#     Vector4((1.0, 0.0, 0.0, 1.0), dtype="f4"),
+#     Vector3((0.0, 0.0, 0.0), dtype="f4"),
+#     smoothness=1.0,
+#     ior=1.5,
+# )
+
+
 
 car_csys = numba_scripts.classes.Csys()
 car_csys._pos = np.array([0.0, 1.0, 8.0], dtype=np.float32)
 car_csys.ryg(180)
+
+spheres = [
+    Sphere(
+        pos=car_csys._pos + np.array([0.0, 1.5, 0.0]),
+        radius=1.0,
+        material=material_red_1,
+    ),
+]
+
+scene.spheres = spheres
 
 scene.cam.csys.pos = pyrr.Vector3([0.0, 2.0, 0.0])
 
@@ -146,3 +173,18 @@ for (i, (f, material)) in enumerate(load_data):
     scene.meshes.append(msh1)
 
 print(f"There are `{scene.count_triangles()}` triangles in the scene.")
+
+from ..animate import Animation
+from math import sin, cos, tan, pi
+
+import numba_scripts.classes
+
+def mesh_csys_animate(obj: numba_scripts.classes.Csys, t, x0:Vector3):
+    obj._pos[0] = x0[0] + 1.0 * sin(t / 2)
+    obj._pos[1] = x0[1]
+    obj._pos[2] = x0[2] + 1.0 * sin(t / 3)
+    print("here")
+
+from functools import partial
+scene.animations.append(Animation(scene.meshes[-1].csys, partial(mesh_csys_animate, x0=scene.meshes[0].csys._pos)))
+

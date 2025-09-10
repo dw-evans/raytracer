@@ -38,8 +38,11 @@ class Material(ByteableObject):
         emissionStrength: float = 0.0,
         smoothness: float = 0.0,
         transmission: float = 0.0,
-        ior: float = 1.0,
-        transparent_from_behind = False
+        ior: float = 1.5,
+        transparent_from_behind = False,
+        specularColor: Vector3 = Vector3((1.0, 1.0, 1.0)),
+        specularStrength: float = 0.0,
+        metallic: float = 0.0, # metallic of 1 will give specular reflections 100% tint.
     ) -> None:
 
         self.color = color
@@ -52,16 +55,36 @@ class Material(ByteableObject):
 
         self.transparent_from_behind = transparent_from_behind
 
+        self.metallic = metallic
+
+        self.specularColor = specularColor
+        self.specularStrength = specularStrength
+
+
     def tobytes(self):
         return struct.pack(
-            "4f 3f f f f f i",
-            *self.color,
-            *self.emissionColor,
-            self.emissionStrength,
-            self.smoothness,
-            self.transmission,
-            self.ior,
-            self.transparent_from_behind
+            "4f"
+            "4f"
+            "3ff"
+            "ffff"
+            "fi8x"
+            ,
+            *self.color, # vec4
+
+            *self.emissionColor, # vec3 
+            0.0,
+
+            *self.specularColor, # vec3 
+            # 0.0,
+            
+            self.emissionStrength, # float
+            self.specularStrength, # float
+            self.smoothness, # float
+            self.transmission, # float
+
+            self.ior, # float
+            self.metallic, # float
+            self.transparent_from_behind, # bool
         )
 
     # def tobytes(self):
