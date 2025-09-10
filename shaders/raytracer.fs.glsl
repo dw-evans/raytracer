@@ -30,19 +30,20 @@ uniform uint frameNumber;
 uniform bool STATIC_RENDER;
 
 // uniform vec3 skyColor;
-uniform vec3 groundColor;
+// uniform vec3 groundColor;
 
 uniform int selectedMeshId;
 
 uniform float depthOfFieldStrength;
 uniform float antialiasStrength;
 
-
 uniform int chunkx;
 uniform int chunky;
 
 uniform int chunksx;
 uniform int chunksy;
+
+uniform int MAX_CYCLES;
 
 // uniform bool oneSidedTris;
 
@@ -420,6 +421,11 @@ HitInfo calculateRayCollision(Ray ray, inout uint rngState)
             sphere.radius
         );
 
+        if (hitInfo.dst < 1e-6) 
+        {
+            continue;
+        }
+
         if ((hitInfo.didHit) && (hitInfo.dst < closestHit.dst))
         {
             closestHit = hitInfo;
@@ -557,8 +563,8 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
     Material prevmaterial;
     bool isSpecularBounce;
     bool isTransmission;
-    vec3 mixinColor;
-    vec3 specularMixinColor;
+    vec3 mixinColor = vec3(1.0);
+    vec3 specularMixinColor = vec3(1.0);
 
     for (int i = 0; i <= MAX_BOUNCES; i++)
     {
@@ -569,13 +575,6 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
 
             prevmaterial = ray.prevHit.material;
             material = hitInfo.material;
-
-            // handle transmission of the last hit before performing color calculations
-            vec3 transmissionColor;
-            Material transmissionMaterial = prevmaterial;
-            float attenuationCoeff = -log(transmissionMaterial.transmission);
-            transmissionColor = transmissionMaterial.color.xyz * exp(-attenuationCoeff* hitInfo.dst);
-            rayColor *= transmissionColor * transmissionMaterial.color.w;
 
             // deal with transparency by allowing some fraction of the rays to pass through
             // do no do any color modifications if it passes through.
@@ -617,13 +616,18 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
 
             // technically there is a -1 * -1, I think? 
             specularDir = refract(ray.dir, normalFlip * hitInfo.normal, eta);
+            diffuseDir = normalize(normalFlip * hitInfo.normal + randomDirection(rngState));
+
+            // if (specularDir == vec3(0.0))
+            // {
+            //     rayColor = vec3(1.0, 0.0, 1.0);
+                // continue;
+            // }
 
             // float costheta = cosAngleBetweenVectors(-1 * normalFlip * hitInfo.normal, specularDir);
             float costheta = cosAngleBetweenVectors(normalFlip * hitInfo.normal, -ray.dir);
             float shlickRatio = cosSchlickApproximation(n1, n2, costheta);
-
-            // float theta = angleBetweenVectors(-1 * normalFlip * hitInfo.normal, specularDir);
-            // float shlickRatio = schlickApproximation(n1, n2, theta);
+            
 
             // if greater than the shlickRatio, it refracts successfully and enters the material
             // refraction of non-transmission will be a diffuse reflection
@@ -639,18 +643,25 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
                 else
                 {
                     // the ray does not transmit, invert the normal in preparation for diffuse reflection
-                    normalFlip *= -1;
+                    // normalFlip *= -1;
+                    specularDir = reflect(ray.dir, hitInfo.normal);
                 }
 
                 // on transmissive refraction into the material, the diffuse dir will enter the material...?
-                diffuseDir = normalize(-1 * normalFlip * hitInfo.normal + randomDirection(rngState));
+                // diffuseDir = normalize(normalFlip * hitInfo.normal + randomDirection(rngState));
 
                 if (isTransmission) 
                 {
                     // if it hits the back side, we must assume it is refracting out into atmosphere
+                    // handle transmission of the last hit before performing color calculations
+                    // vec3 transmissionColor;
+                    // Material transmissionMaterial = prevmaterial;
+                    // float attenuationCoeff = -log(transmissionMaterial.transmission);
+                    // transmissionColor = transmissionMaterial.color.xyz * exp(-attenuationCoeff* hitInfo.dst);
+                    // rayColor *= transmissionColor * transmissionMaterial.color.w;
                     if (hitInfo.hitBackside)
                     {
-                        mixinColor = atmosphereMaterial.color.xyz;
+                        // mixinColor = atmosphereMaterial.color.xyz;
                         ray.inSolid = false;
                         ray.ior = atmosphereMaterial.ior;
                     } 
@@ -658,6 +669,7 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
                     else
                     { 
                         mixinColor = material.color.xyz;
+                        
                         ray.inSolid = true;
                         ray.ior = material.ior;
                     }
@@ -681,6 +693,7 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
 
             } 
             // if less than shlick, it is a specular bounce off the surface
+
             else
             {
                 isSpecularBounce = true;
@@ -692,10 +705,7 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
                 } else {
                     ray.inSolid = false;
                 }
-
-                // it reflects and picks up the material color
                 specularDir = reflect(ray.dir, hitInfo.normal);
-                // rayColor *= material.color.xyz;
             }
 
             if (i == MAX_BOUNCES) { break; }
@@ -707,14 +717,17 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
             if (isSpecularBounce)
             {
                 ray.dir = specularDir;
-                specularMixinColor = vec3(1.0);
+                specularMixinColor = vec3(1.0, 1.0, 1.0);
                 rayColor *= specularMixinColor;
             }
             // mix between diffuse and specular directions based on material smoothness
             else
             {
+                // ray.dir = mix(diffuseDir, specularDir, material.smoothness);
                 ray.dir = mix(diffuseDir, specularDir, material.smoothness);
+                // ray.dir = diffuseDir
                 rayColor *= mixinColor;
+                // rayColor *= vec3(1.0);
             }
 
             ray.prevHit = hitInfo;
@@ -744,6 +757,13 @@ vec4 gammaCorrect(vec4 color, float gamma)
 
 void main() 
 {
+
+    if (frameNumber > MAX_CYCLES)
+    {
+        color = texture(previousFrame, (fragPosition.xy + 1.0) / 2);
+        return;
+    }
+
 
     vec2 fragAbsPos = (fragPosition.xy + 1.0) * 0.5;
 
@@ -808,10 +828,11 @@ void main()
         float weight = 0.0;
         if (i == (RAYS_PER_PIXEL - 1))
         {
-            totalIncomingLight = totalIncomingLight * (1-weight) + weight * abs(newRay.dir);
+            totalIncomingLight = totalIncomingLight * (1-weight) + weight * newRay.dir;
             // totalIncomingLight = totalIncomingLight * (1-weight) + weight * abs(newRay.prevHit.normal);
             // totalIncomingLight = totalIncomingLight * (1-weight) + weight * (-newRay.prevHits.normal);
             // totalIncomingLight = totalIncomingLight * (1-weight) + weight * abs(newRay.prevHit.dst);
+            // totalIncomingLight = totalIncomingLight * (1-weight) + weight * newRay.prevHit.material.color.xyz;
             // totalIncomingLight = totalIncomingLight * (1-weight) + weight * newRay.prevHit.material.color.xyz;
             // totalIncomingLight = totalIncomingLight * (1-weight) + weight * float(newRay.inSolid) * vec3(1.0, 0.0, 1.0);
             // totalIncomingLight = totalIncomingLight * (1-weight) + weight * float(!newRay.prevHit.hitBackside) * vec3(1.0, 0.0, 1.0);

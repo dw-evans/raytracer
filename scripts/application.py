@@ -55,6 +55,9 @@ from scripts.scenes import final_scene_numba
 
 scn = final_scene_numba
 
+def reload_scene():
+    pass
+
 from pathlib import Path
 import datetime
 
@@ -88,6 +91,8 @@ class Application:
         self.WINDOW_HEIGHT = 1080 // factor
         # self.WINDOW_HEIGHT = 1440 // 8
         self.ASPECT_RATIO = 16 / 9
+
+        self.MAX_CYCLES = 2048
 
         self.CHUNKSX = 8 // factor
         self.CHUNKSY = 8 // factor
@@ -316,17 +321,22 @@ class Application:
 
         self.watchdog.join()
 
-    def save_frame_and_animate_next(self):
+
+    def save_frame(self):
         buffer = self.display_program.context.screen.read(components=3, dtype="f1")
         size = (self.display_program.width, self.display_program.height)
         img = functions.buffer_to_image(buffer, size)
         img.save(self.export_directory / f"{self.frame_counter:05}.png")
 
+
+    def animate_next(self):
         if self.is_animating:
             print(self.animation_clock)
             self.display_scene.animate(time=self.animation_clock)
             self.display_program.configure_program(self.display_scene)
             self.animation_clock = self.animation_clock + self.dt
+
+
 
     class ShaderHandler(FileSystemEventHandler):
         def __init__(self, app: Application):
@@ -366,10 +376,15 @@ class Application:
     def run_file_watchdog(self):
         event_handler = self.ShaderHandler(app=self)
         observer = Observer()
-        path = "shaders"
-        observer.schedule(event_handler, path, recursive=False)
+        paths = [
+            "shaders",
+        ]
+        paths += list(Path("scripts/scenes").glob("*.py"))
+        for path in paths:
+            observer.schedule(event_handler, path, recursive=False)
+            print(f"Started watching {path} for modifications.")
+
         observer.start()
-        print(f"Started watching {path} for modifications.")
 
         try:
             while True:
@@ -739,6 +754,8 @@ class RayTracerDynamic(ProgramABC):
         self.sphere_buffer_binding = 1
         self.is_scene_static = True
 
+
+
     def configure_program(self, scene: Scene):
 
         program = self.program
@@ -796,8 +813,8 @@ class RayTracerDynamic(ProgramABC):
         self.cycle_counter = 0
         self.shader_rng_counter = 0
 
-        # program["STATIC_RENDER"].write(struct.pack("i", True))
-        program["STATIC_RENDER"].write(struct.pack("i", False))
+        program["STATIC_RENDER"].write(struct.pack("i", True))
+        # program["STATIC_RENDER"].write(struct.pack("i", False))
         program["MAX_BOUNCES"].write(struct.pack("i", self.MAX_RAY_BOUNCES))
         program["RAYS_PER_PIXEL"].write(struct.pack("i", self.RAYS_PER_PIXEL))
         # program["RAYS_PER_PIXEL"].write(struct.pack("i", 1))
@@ -862,6 +879,8 @@ class RayTracerDynamic(ProgramABC):
         # program["chunksy"].write(struct.pack("i", self.app.CHUNKSY))
         program["chunksx"].write(struct.pack("i", 1))
         program["chunksy"].write(struct.pack("i", 1))
+
+        program["MAX_CYCLES"].write(struct.pack("i", self.app.MAX_CYCLES))
 
     def calculate_frame_via_chunking(self, scene: Scene, flip: bool = True):
         import gc
@@ -936,7 +955,7 @@ class RayTracerDynamic(ProgramABC):
         # scene.meshes[0].csys.pos.z = 0.0 + 5.0 * sin(time / 2)
         # scene.spheres[-2].pos.x = 2 + 1.0 * sin(time)
 
-        program["frameNumber"].write(struct.pack("I", self.shader_rng_counter))
+        # program["frameNumber"].write(struct.pack("I", self.shader_rng_counter))
         CAM_DEPTH_OF_FIELD_STRENGTH = 0.000
         program["depthOfFieldStrength"].write(
             struct.pack("f", CAM_DEPTH_OF_FIELD_STRENGTH),
@@ -964,7 +983,6 @@ class RayTracerDynamic(ProgramABC):
         self.texA, self.texB = self.texB, self.texA
 
         pygame.display.flip()
-        print("here")
 
         # self.calculate_frame_via_chunking(scene)
 
@@ -973,6 +991,7 @@ class RayTracerDynamic(ProgramABC):
 
         if self.is_scene_static:
             self.cycle_counter += 1
+            program["frameNumber"].write(struct.pack("I", self.cycle_counter))
         else:
             self.is_scene_static = True
             self.cycle_counter = 0
@@ -1403,7 +1422,8 @@ class RayTracerStatic(ProgramABC):
         )
 
         if self.cycle_counter >= self.CYCLES_PER_FRAME:
-            self.app.save_frame_and_animate_next()
+            self.app.save_frame()
+            self.app.animate_next()
             self.cycle_counter = 0
             self.frame_counter += 1
 
