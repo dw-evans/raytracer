@@ -53,13 +53,16 @@ float pi = 3.14159265359;
 struct Material
 {
     vec4 color; // 16 
-    vec3 emissionColor; // 12
     vec3 specularColor; // 12
+    
+    vec3 emissionColor; // 12
     float emissionStrength; // 4
+
     float specularStrength; // 4
     float smoothness; // 4
     float transmission; // 4
     float ior; // 4
+    
     float metallic; // 4
     bool transparentFromBehind; // 4
 };
@@ -572,11 +575,14 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
     // vec3 mixinColor = vec3(1.0);
     // vec3 specularMixinColor = vec3(1.0);
 
+    vec3 mixinColor;
+    vec3 specularColor;
+    vec3 diffuseColor;
+
     for (int i = 0; i <= MAX_BOUNCES; i++)
     {
         bool isTransmission = false;
         bool isSpecularBounce = false;
-        vec3 mixinColor = vec3(1.0);
 
         // if (i == 0) { break; }
         HitInfo hitInfo = calculateRayCollision(ray, rngState);
@@ -626,6 +632,7 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
 
             // technically there is a -1 * -1, I think? 
             specularDir = refract(ray.dir, normalFlip * hitInfo.normal, eta);
+            // diffuse direction into the material
             diffuseDir = normalize(-1 * normalFlip * hitInfo.normal + randomDirection(rngState));
 
             // if (specularDir == vec3(0.0))
@@ -634,111 +641,124 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
                 // continue;
             // }
 
-            // float costheta = cosAngleBetweenVectors(-1 * normalFlip * hitInfo.normal, specularDir);
             float costheta = cosAngleBetweenVectors(normalFlip * hitInfo.normal, -ray.dir);
             float shlickRatio = cosSchlickApproximation(n1, n2, costheta);
-            
 
-            // if greater than the shlickRatio, it refracts successfully and enters the material
-            // refraction of non-transmission will be a diffuse reflection
-            if (randomValue(rngState) > shlickRatio)
+
+            // divert fraction of energy to specular probabilisically
+            isSpecularBounce = (randomValue(rngState) < material.specularStrength);
+
+            if (isSpecularBounce)
             {
-                isSpecularBounce = false;
+                // if the ray is already within a solid, reflecting within a solid keeps it within a solid do not change ior
+                // Maintain inSolid and ray.ior as it were before.
 
-                if (randomValue(rngState) < material.transmission)
-                {
-                    // the ray transmits through the material, i.e. transmissive material refraction
-                    isTransmission = true;
-                }
-                else
-                {
-                    // the ray does not transmit, invert the normal in preparation for diffuse reflection
-                    // normalFlip *= -1;
-                    specularDir = reflect(ray.dir, hitInfo.normal);
-                    diffuseDir *= -1;
-                }
-
-                // on transmissive refraction into the material, the diffuse dir will enter the material...?
-                // diffuseDir = normalize(normalFlip * hitInfo.normal + randomDirection(rngState));
-
-                if (isTransmission) 
-                {
-                    // if it hits the back side, we must assume it is refracting out into atmosphere
-                    // handle transmission of the last hit before performing color calculations
-                    // vec3 transmissionColor;
-                    // Material transmissionMaterial = prevmaterial;
-                    // float attenuationCoeff = -log(transmissionMaterial.transmission);
-                    // transmissionColor = transmissionMaterial.color.xyz * exp(-attenuationCoeff* hitInfo.dst);
-                    // rayColor *= transmissionColor * transmissionMaterial.color.w;
-                    if (hitInfo.hitBackside)
-                    {
-                        // mixinColor = atmosphereMaterial.color.xyz;
-                        ray.inSolid = false;
-                        ray.ior = atmosphereMaterial.ior;
-                    } 
-                    // if it refracts off an outside surface, it is entering the material
-                    else
-                    { 
-                        mixinColor = material.color.xyz;
-                        ray.inSolid = true;
-                        ray.ior = material.ior;
-                    }
-                }
-                else
-                {
-                    // diffuse reflection off the back side of a surface
-                    // if it hits the back side, we must assume it is diffusely reflecting internally
-                    if (hitInfo.hitBackside)
-                    {
-                        mixinColor = material.color.xyz;
-                        ray.inSolid = true;
-                        ray.ior = material.ior;
-                    } 
-                    // if it hits the front side, it is plain diffuse reflection. maintain ray.inSolid and ior.
-                    else
-                    { 
-                        mixinColor = material.color.xyz;
-                    }
-                }
-
-            } 
-            // if less than shlick, it is a specular bounce off the surface
+                // specular direction is now a reflect
+                specularDir = reflect(ray.dir, hitInfo.normal * normalFlip);
+                // invert the diffuse direction
+                diffuseDir *= -1;
+            }
 
             else
             {
-                isSpecularBounce = true;
-                // if the ray is already within a solid, reflecting within a solid keeps it within a solid do not change ior
-                if (ray.inSolid) {
-                    ray.inSolid = true;
+                // if greater than the shlickRatio, it refracts successfully and enters the material
+                // refraction of non-transmission will be a diffuse reflection
+                if (randomValue(rngState) > shlickRatio)
+                {
+                    isSpecularBounce = false;
+                    // isSpecularBounce = true;
 
-                // if the ray is not in a solid, reflecting keeps it outside a solid. do not change ior
-                } else {
-                    ray.inSolid = false;
+                    if (randomValue(rngState) < material.transmission)
+                    {
+                        // the ray transmits through the material, i.e. transmissive material refraction
+                        isTransmission = true;
+                    }
+                    else
+                    {
+                        // the ray does not transmit, invert the normal in preparation for diffuse reflection
+                        // normalFlip *= -1;
+                        specularDir = reflect(ray.dir, hitInfo.normal);
+                        diffuseDir *= -1;
+                    }
+
+                    // on transmissive refraction into the material, the diffuse dir will enter the material...?
+                    // diffuseDir = normalize(normalFlip * hitInfo.normal + randomDirection(rngState));
+
+                    if (isTransmission) 
+                    {
+                        // if it hits the back side, we must assume it is refracting out into atmosphere
+                        // handle transmission of the last hit before performing color calculations
+
+                        // vec3 transmissionColor;
+                        // Material transmissionMaterial = prevmaterial;
+                        // float attenuationCoeff = -log(transmissionMaterial.transmission);
+                        // transmissionColor = transmissionMaterial.color.xyz * exp(-attenuationCoeff* hitInfo.dst);
+                        // rayColor *= transmissionColor * transmissionMaterial.color.w;
+
+                        if (hitInfo.hitBackside)
+                        {
+                            // mixinColor = atmosphereMaterial.color.xyz;
+                            // mixinColor = vec3(1.0);
+                            ray.inSolid = false;
+                            ray.ior = atmosphereMaterial.ior;
+                        } 
+                        // if it refracts off an outside surface, it is entering the material
+                        else
+                        { 
+                            // mixinColor = material.color.xyz;
+                            ray.inSolid = true;
+                            ray.ior = material.ior;
+                        }
+                    }
+                    else
+                    {
+                        // diffuse reflection off the back side of a surface
+                        // if it hits the back side, we must assume it is diffusely reflecting internally
+                        if (hitInfo.hitBackside)
+                        {
+                            // mixinColor = material.color.xyz;
+                            ray.inSolid = true;
+                            ray.ior = material.ior;
+                        } 
+                        // if it hits the front side, it is plain diffuse reflection. maintain ray.inSolid and ior.
+                        else
+                        { 
+                            // mixinColor = material.color.xyz;
+                        }
+                    }
+                } 
+                else
+                {
+                    isSpecularBounce = true;
+                    specularDir = reflect(ray.dir, hitInfo.normal * normalFlip);
+                    diffuseDir *= -1;
                 }
-                specularDir = reflect(ray.dir, hitInfo.normal);
             }
+    
+
 
             if (i == MAX_BOUNCES) { break; }
 
             // move the ray origin to its hit point
             ray.origin = hitInfo.hitPoint;
+            
+            // bias direction based on smoothness, or use specular
+            // ray.dir = mix(diffuseDir, specularDir, bool(material.smoothness * float(isSpecularBounce)));
+            // rayColor *= mix(material.color.xyz, material.specularColor, isSpecularBounce);
 
-            // if specular, perform a specular bounce
+            // isSpecularBounce = true;
+
             if (isSpecularBounce)
             {
-                ray.dir = specularDir;
-                mixinColor = mix(material.specularColor.xyz, material.color.xyz, material.metallic);
-                rayColor *= mixinColor;
+                ray.dir = mix(diffuseDir, specularDir, material.smoothness);
+                rayColor *= material.specularColor;
             }
-            // mix between diffuse and specular directions based on material smoothness
             else
             {
-                // ray.dir = mix(diffuseDir, specularDir, material.smoothness);
-                ray.dir = mix(diffuseDir, specularDir, material.smoothness);
-                // ray.dir = diffuseDir
-                rayColor *= mixinColor;
-                // rayColor *= vec3(1.0);
+                ray.dir = diffuseDir;
+                rayColor *= material.color.xyz;
             }
+
 
             ray.prevHit = hitInfo;
 

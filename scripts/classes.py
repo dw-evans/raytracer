@@ -33,7 +33,7 @@ class ByteableObject(Protocol):
 class Material(ByteableObject):
     def __init__(
         self,
-        color: Vector4 = Vector4((0.0, 0.0, 0.0, 0.0)),
+        color: Vector4 = Vector4((1.0, 0.0, 1.0, 1.0)),
         emissionColor: Vector3 = Vector3((0.0, 0.0, 0.0)),
         emissionStrength: float = 0.0,
         smoothness: float = 0.0,
@@ -64,25 +64,24 @@ class Material(ByteableObject):
     def tobytes(self):
         return struct.pack(
             "4f"
-            "4f"
+            "3ff"
             "3ff"
             "ffff"
             "fi8x"
             ,
             *self.color, # vec4
 
-            *self.emissionColor, # vec3 
+            *self.specularColor, # vec3
             0.0,
 
-            *self.specularColor, # vec3 
-            # 0.0,
-            
+            *self.emissionColor, # vec3 
             self.emissionStrength, # float
+
             self.specularStrength, # float
             self.smoothness, # float
             self.transmission, # float
-
             self.ior, # float
+
             self.metallic, # float
             self.transparent_from_behind, # bool
         )

@@ -73,7 +73,7 @@ material_white_passthrough = Material(
 material_light_source_1 = Material(
     Vector4((0.0, 0.0, 0.0, 1.0), dtype="f4"),
     emissionColor=Vector3((1, 1.0, 1), dtype="f4"),
-    emissionStrength=4.0,
+    emissionStrength=2.0,
 )
 
 glass_material = Material(
@@ -107,7 +107,7 @@ load_data = [
     ("objects/old/final_scene/wall_right.obj", material_green_passthrough),
     ("objects/old/final_scene/wall_top.obj", material_white_passthrough),
     ("objects/old/final_scene/wall_bottom.obj", material_white_passthrough),
-    ("objects/old/final_scene/wall_front.obj", material_blue_passthrough),
+    # ("objects/old/final_scene/wall_front.obj", material_blue_passthrough),
     ("objects/old/final_scene/wall_back.obj", material_blue_passthrough),
     ("objects/old/final_scene/light.obj", material_light_source_1),
     # ("objects/old/final_scene/subject.obj", material_subject),
@@ -119,6 +119,7 @@ material_red_1 = Material(
     Vector4((1.0, 1.0, 1.0, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
     smoothness=1.0,
+    specularStrength=0.2,
     ior=1.0,
 )
 
