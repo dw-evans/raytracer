@@ -94,8 +94,8 @@ class Application:
 
         self.MAX_CYCLES = 2048 * 2048
 
-        self.CHUNKSX = 8 // factor
-        self.CHUNKSY = 8 // factor
+        self.CHUNKSX = 32 // factor
+        self.CHUNKSY = 32 // factor
 
         # mouse / keyboard movement camera speeds
         self.CAMERA_LINEAR_SPEED = 3.0
@@ -950,12 +950,6 @@ class RayTracerDynamic(ProgramABC):
 
         self.program["MAX_BOUNCES"].write(struct.pack("i", self.MAX_RAY_BOUNCES))
 
-        # self.is_scene_static = False
-        # time = pygame.time.get_ticks() / np.float32(1000.0)
-        # scene.meshes[0].csys.pos.z = 0.0 + 5.0 * sin(time / 2)
-        # scene.spheres[-2].pos.x = 2 + 1.0 * sin(time)
-
-        # program["frameNumber"].write(struct.pack("I", self.shader_rng_counter))
         CAM_DEPTH_OF_FIELD_STRENGTH = 0.000
         program["depthOfFieldStrength"].write(
             struct.pack("f", CAM_DEPTH_OF_FIELD_STRENGTH),
@@ -969,10 +963,15 @@ class RayTracerDynamic(ProgramABC):
         program["CamLocalToWorldMatrix"].write(cam.local_to_world_matrix.astype("f4"))
         program["CamGlobalPos"].write(cam.csys.pos.astype("f4"))
 
+        # program["chunksx"].write(struct.pack("i", 2))
+        # program["chunksy"].write(struct.pack("i", 2))
+
+        # program["chunkx"].write(struct.pack("i", 0))
+        # program["chunky"].write(struct.pack("i", 0))
+
         self.texB.use(location=1)
         self.fboA.use()
         self.vao.render(mode=moderngl.TRIANGLE_STRIP)
-
 
         self.context.screen.use()
         self.texA.use(location=0)
@@ -1159,8 +1158,8 @@ class RayTracerStatic(ProgramABC):
             standalone,
             require,
         )
-        self.MAX_RAY_BOUNCES = 6
-        self.RAYS_PER_PIXEL = 4
+        self.MAX_RAY_BOUNCES = 8
+        self.RAYS_PER_PIXEL = 32
         self.CYCLES_PER_FRAME = 1
 
         self.sphere_buffer_binding = 1
@@ -1210,11 +1209,11 @@ class RayTracerStatic(ProgramABC):
             self.screen_prog, self.screen_vbo, "in_pos", "in_uv"
         )
 
-        self.texA = self.context.texture((self.width, self.height), 3)
+        self.texA = self.context.texture((self.width, self.height), 3, dtype="f4")
         self.texA.use(location=0)
 
         # self.fbo = context.framebuffer(color_attachments=[self.texA])
-        self.texB = self.context.texture((self.width, self.height), 3)
+        self.texB = self.context.texture((self.width, self.height), 3, dtype="f4")
 
         self.fboA = context.framebuffer(color_attachments=[self.texA])
         self.fboB = context.framebuffer(color_attachments=[self.texB])
@@ -1222,14 +1221,9 @@ class RayTracerStatic(ProgramABC):
         self.frame_counter = 0
         self.cycle_counter = 0
         self.shader_rng_counter = 0
-        self.target_dir = (
-            Path()
-            / "renders/RayTracerStatic"
-            / f"{datetime.datetime.now().strftime("%Y.%m.%d_%H%M%S")}"
-        )
-        self.target_dir.mkdir(parents=True)
 
         program["STATIC_RENDER"].write(struct.pack("i", True))
+        # program["STATIC_RENDER"].write(struct.pack("i", False))
         program["MAX_BOUNCES"].write(struct.pack("i", self.MAX_RAY_BOUNCES))
         program["RAYS_PER_PIXEL"].write(struct.pack("i", self.RAYS_PER_PIXEL))
         # program["RAYS_PER_PIXEL"].write(struct.pack("i", 1))
@@ -1292,10 +1286,22 @@ class RayTracerStatic(ProgramABC):
 
         program["chunksx"].write(struct.pack("i", self.app.CHUNKSX))
         program["chunksy"].write(struct.pack("i", self.app.CHUNKSY))
+        # program["chunksx"].write(struct.pack("i", 1))
+        # program["chunksy"].write(struct.pack("i", 1))
 
-    def calculate_frame_via_chunking(self, scene: Scene, flip: bool = True):
+        program["MAX_CYCLES"].write(struct.pack("i", self.app.MAX_CYCLES))
+
+        self.target_dir = (
+            Path()
+            / "renders/RayTracerStatic"
+            / f"{datetime.datetime.now().strftime("%Y.%m.%d_%H%M%S")}"
+        )
+        self.target_dir.mkdir(parents=True)
+
+
+
+    def calculate_frame_via_chunking(self, scene: Scene):
         import gc
-
         gc.disable()
         vao = self.vao
         program = self.program
@@ -1311,44 +1317,29 @@ class RayTracerStatic(ProgramABC):
                 program["chunkx"].write(struct.pack("i", i))
                 program["chunky"].write(struct.pack("i", j))
 
-                # use texB as the previous frame sampler
                 self.texB.use(location=1)
-                # render to fboA
                 self.fboA.use()
-                vao.render(mode=moderngl.TRIANGLE_STRIP)
-
-                # # switch to screen
-                # context.screen.use()
-                # # set screen prog's tex input to loc 0
-                # self.texA.use(location=0)
-                # self.screen_prog['uTexture'].value = 0
-                # # render the screen va0
-                # self.screen_vao.render(mode=moderngl.TRIANGLE_STRIP)
+                self.vao.render(mode=moderngl.TRIANGLE_STRIP)
 
                 _t = time.time_ns()
                 print(f"{i:03d}, {j:03d}: {(_t-time_of_last_render) / 1e6} ms")
-                if (_t - time_of_last_render) > time_between_renders:
-                    # if True:
-
-                    # t1 = time.time_ns()
-                    # context.screen.use()
-                    # # set screen prog's tex input to loc 0
-                    # self.texA.use(location=0)
-                    # self.screen_prog['uTexture'].value = 0
-                    # # render the screen va0
-                    # self.screen_vao.render(mode=moderngl.TRIANGLE_STRIP)
-                    # pygame.display.flip()
-                    # t2 = time.time_ns()
+                # if (_t - time_of_last_render) > time_between_renders or (i == self.app.CHUNKSX-1 and j == self.app.CHUNKSY-1):
+                if True:
 
                     t1 = time.time_ns()
-                    context.screen.use()
+
+                    self.context.screen.use()
                     self.texA.use(location=0)
                     self.screen_prog["uTexture"].value = 0
                     self.screen_vao.render(mode=moderngl.TRIANGLE_STRIP)
+
                     t2 = time.time_ns()
+
                     pygame.display.flip()
+
                     t3 = time.time_ns()
                     print(f"render: {(t2-t1)/1e6:.2f} ms | flip: {(t3-t2)/1e6:.2f} ms")
+                    # time.sleep(0.1)
 
                     print(f"render time: {(t2-t1) / 1e6} ms")
                     time_of_last_render = _t
@@ -1356,8 +1347,10 @@ class RayTracerStatic(ProgramABC):
                         if event.type == pygame.QUIT:
                             sys.exit()
 
+
                 context.finish()
 
+                # time.sleep(1.0)
                 self.app.clock.tick(1000)
 
                 # swap the textures at the end of rendering
@@ -1366,14 +1359,12 @@ class RayTracerStatic(ProgramABC):
 
                 pass
 
-        time.sleep(0.01)
+        time.sleep(0.001)
         gc.enable()
 
         return
 
     def calculate_frame(self, scene: Scene):
-
-        self.cycle_counter += 1
 
         vao = self.vao
         program = self.program
@@ -1384,18 +1375,12 @@ class RayTracerStatic(ProgramABC):
 
         self.program["MAX_BOUNCES"].write(struct.pack("i", self.MAX_RAY_BOUNCES))
 
-        # self.is_scene_static = False
-        # time = pygame.time.get_ticks() / np.float32(1000.0)
-        # scene.meshes[0].csys.pos.z = 0.0 + 5.0 * sin(time / 2)
-        # scene.spheres[-2].pos.x = 2 + 1.0 * sin(time)
-
-        program["frameNumber"].write(struct.pack("I", self.shader_rng_counter))
         CAM_DEPTH_OF_FIELD_STRENGTH = 0.000
         program["depthOfFieldStrength"].write(
             struct.pack("f", CAM_DEPTH_OF_FIELD_STRENGTH),
         )
-        CAM_ANTIALIAS_STRENGTH = 0.001
-        program["antialiasStrength"].write(
+        CAM_ANTIALIAS_STRENGTH = 0.000001
+        program["depthOfFieldStrength"].write(
             struct.pack("f", CAM_ANTIALIAS_STRENGTH),
         )
 
@@ -1403,32 +1388,85 @@ class RayTracerStatic(ProgramABC):
         program["CamLocalToWorldMatrix"].write(cam.local_to_world_matrix.astype("f4"))
         program["CamGlobalPos"].write(cam.csys.pos.astype("f4"))
 
-        def render_full():
-            self.texB.use(location=1)
-            vao.render(mode=moderngl.TRIANGLE_STRIP)
-            render_data = context.screen.read(components=3, dtype="f1")
-            self.texB.write(render_data)
+        self.calculate_frame_via_chunking(scene)
 
-        self.calculate_frame_via_chunking(scene, flip=True)
+        if self.is_scene_static:
+            self.cycle_counter += 1
+            program["frameNumber"].write(struct.pack("I", self.cycle_counter))
+        else:
+            self.is_scene_static = True
+            self.cycle_counter = 0
+            program["frameNumber"].write(struct.pack("I", 0))
+            pass
+
+        print(self.cycle_counter)
+        self.shader_rng_counter += 1
+
+        self.context.gc()
+
+        if not self.cycle_counter % 1:
+            # buffer = self.fboB.read(components=3, dtype="f1")
+            buffer = self.fboB.read(components=3, dtype="f4")
+            hdr_data = np.frombuffer(buffer, dtype=np.float32)
+            hdr_data = hdr_data.reshape((self.height, self.width, 3))
+            
+            # rgb = hdr_data
+            rgb = np.clip(hdr_data, 0.0, 1.0)
+            rgb_flipped = np.flip(rgb, axis=0)
+            rgb_tm = tone_map(rgb_flipped)
+            rgb_tm_gamma = gamma_correct(rgb_tm)
+            
+            # rgb_display = rgb_tm_gamma
+            rgb_display = rgb_tm_gamma
+            display_8bit = (rgb_display[..., :3] * 255).astype(np.uint8)
+
+            # imageio.imwrite('render.png', display_8bit)
+            import imageio
+            imageio.imwrite(self.target_dir / f"{self.frame_counter:05}_{self.cycle_counter:05}-tm-g.png", display_8bit, format="png")
+
+            rgb_display = rgb_flipped
+            display_8bit = (rgb_display[..., :3] * 255).astype(np.uint8)
+            imageio.imwrite(self.target_dir / f"{self.frame_counter:05}_{self.cycle_counter:05}-plain.png", display_8bit, format="png")
+
+
+            # rgb16 = np.clip(rgb_tm_gamma, 0.0, 1.0)
+            # rgb16 = (rgb16 * 65535).astype(np.uint16)
+            # alpha = np.full((rgb16.shape[0], rgb16.shape[1], 1), 65535, dtype=np.uint16)
+            # rgba16 = np.concatenate([rgb16, alpha], axis=2) 
+            # import imageio
+            # imageio.imsave(self.target_dir / f"{self.frame_counter:05}_{self.cycle_counter:05}-rgba16.png", rgba16, format="png")
+
+
+            # size = (self.width, self.height)
+            # img = functions.buffer_to_image(buffer, size)
+            # img.save(self.target_dir / f"{self.frame_counter:05}_{self.cycle_counter:05}.png")
+
+
+        return
+
 
         # fboB is the output frame at the end of the cycle.
 
-        buffer = self.fboB.read(components=3, dtype="f1")
-        # buffer = context.screen.read(components=3, dtype="f1")
-        size = (self.width, self.height)
-        img = functions.buffer_to_image(buffer, size)
+        # buffer = self.fboB.read(components=3, dtype="f1")
+        # # buffer = context.screen.read(components=3, dtype="f1")
+        # size = (self.width, self.height)
+        # img = functions.buffer_to_image(buffer, size)
 
-        img.save(
-            self.target_dir / f"{self.frame_counter:05}_{self.cycle_counter:05}.png"
-        )
+        # img.save(
+        #     self.target_dir / f"{self.frame_counter:05}_{self.cycle_counter:05}.png"
+        # )
 
-        if self.cycle_counter >= self.CYCLES_PER_FRAME:
-            self.app.save_frame()
-            self.app.animate_next()
-            self.cycle_counter = 0
-            self.frame_counter += 1
+        # if self.cycle_counter >= self.CYCLES_PER_FRAME:
+        #     self.app.save_frame()
+        #     self.app.animate_next()
+        #     self.cycle_counter = 0
+        #     self.frame_counter += 1
 
         self.shader_rng_counter += 1
+        self.cycle_counter += 1
+
+        self.cycle_counter += 1
+        self.program["frameNumber"].write(struct.pack("I", self.cycle_counter))
 
         self.context.gc()
 
@@ -1544,6 +1582,14 @@ def generic_camera_event_handler(
                 cam.csys.ryg(dyaw)
                 cam.csys.rxp(dpitch)
                 pass
+
+
+def tone_map(color):
+    # color: H x W x 3 or 4
+    return color / (color + 1.0)
+
+def gamma_correct(color, gamma=2.2):
+    return np.power(color, 1.0 / gamma)
 
 
 pass

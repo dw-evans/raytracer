@@ -250,19 +250,18 @@ class Triangle(ByteableObject):
 
 class Mesh(ByteableObject):
     # an arbitrary counter that keeps a UID for each mesh
-    MESH_INDEX = 0
+    MESH_INDEX = -1
 
     def __init__(self, material: Material) -> None:
+        Mesh.MESH_INDEX += 1
         self.pos: Vector3 = Vector3((0.0, 0.0, 0.0))
         self.triangles: list[Triangle] = []
         self.csys = Csys()
         self.mesh_index = self.MESH_INDEX
         self.material = material
 
-        Mesh.MESH_INDEX += 1
 
     def tobytes(self) -> bytes | bytearray:
-
         bbox = self.bounding_box
         return (
             struct.pack(

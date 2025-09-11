@@ -166,7 +166,8 @@ scene.atmosphere_material = atmosphere_material
 body_material = Material(
     # Vector4([0.674, 0.203, 0.600, 1.0]),
     Vector4([0.6706, 0.7373, 0.8392, 1.0]),
-    smoothness=0.8,
+    smoothness=1.0,
+    specularStrength=0.2,
 )
 
 
@@ -174,12 +175,14 @@ body_material = Material(
 chrome_material = Material(
     Vector4([0.29, 0.29, 0.29, 1.0]),
     smoothness=0.95,
+    specularStrength=1.0,
 )
 
 glass_material = Material(
     Vector4([1.0, 1, 1, 1]),
     transmission=1.0,
     smoothness=1.0,
+    # specularStrength=1.0
     ior=1.5,
 )
 roof_material = Material(
@@ -189,16 +192,19 @@ roof_material = Material(
 hubcap_material = Material(
     Vector4([0.8, 0.8, 0.8, 1.0]),
     smoothness=0.5,
+    specularStrength=0.5,
 )
 
 black_material = Material(
     Vector4([0.1, 0.1, 0.1, 1.0]),
     smoothness=0.5,
+    specularStrength=0.2,
 )
 
 rubber_material = Material(
     Vector4([0.1, 0.1, 0.1, 1.0]),
-    smoothness=0.5,
+    smoothness=0.1,
+    specularStrength=0.02
 )
 
 light_material_1 = Material(
@@ -245,7 +251,7 @@ floor_material = Material(
 light_bar_material = Material(
     Vector4([0.0, 0.0, 0.0, 1.0]),
     emissionColor=Vector3([1.0, 1.0, 1.0]),
-    emissionStrength=3.0,
+    emissionStrength=1.0,
 )
 light_bar_cover_material = Material(
     Vector4((0.1, 0.1, 0.1, 1.0), dtype="f4"),
@@ -256,9 +262,6 @@ light_bar_cover_material = Material(
 
 meshes = []
 
-
-"abbcd6" # car color blue
-"571a22" # cloth color
 
 DEFAULT_CSYS = Csys()
 
@@ -294,44 +297,57 @@ name_material_pose = [
 
 ]
 
+# name_material_pose = [
+#     ("objects/test.blend/plane.obj", glass_material, car_csys),
+#     ("objects/test.blend/sphere.obj", rubber_material, car_csys),
+#     ("objects/test.blend/cube.obj", hubcap_material, car_csys),
+
+# ]
 
 
+from .chunker import load_chunked_mesh_into_scene
 
 for i, (_fname, _material, _csys) in enumerate(name_material_pose):
-    msh = trimesh.load(_fname)
 
-    vertex_indices_arr = msh.faces.astype(np.int32)
-    vertices = msh.vertices.astype(np.float32)
-    vertex_normals = msh.vertex_normals.astype(np.float32)
+    print(f"loading mesh from: {_fname}")
+    r = load_chunked_mesh_into_scene(_scene=scene, _fname=_fname, _material=_material, _csys=_csys)
+    print(f"loaded mesh from: {_fname}")
 
-    triangle_count_start = scene.count_triangles()
-    mesh_idx = i
-    triangles = numba_scripts.classes.triangles_from_obj_data(
-        vertex_indices_arr,
-        vertices,
-        vertex_normals,
-        mesh_idx,
-        triangle_count_start,
-    )
+    # msh = trimesh.load(_fname)
 
-    msh1 = Mesh(material=_material)
-    # msh1.csys = car_csys
-    msh1.csys = _csys
-    msh1.triangles = triangles
-    scene.meshes.append(msh1)
+    # vertex_indices_arr = msh.faces.astype(np.int32)
+    # vertices = msh.vertices.astype(np.float32)
+    # vertex_normals = msh.vertex_normals.astype(np.float32)
+
+    # triangle_count_start = scene.count_triangles()
+    # mesh_idx = i
+    # triangles = numba_scripts.classes.triangles_from_obj_data(
+    #     vertex_indices_arr,
+    #     vertices,
+    #     vertex_normals,
+    #     mesh_idx,
+    #     triangle_count_start,
+    # )
+
+    # msh1 = Mesh(material=_material)
+    # # msh1.csys = car_csys
+    # msh1.csys = _csys
+    # msh1.triangles = triangles
+    # scene.meshes.append(msh1)
+
 
 print(f"There are `{scene.count_triangles()}` triangles in the scene.")
 
 
 
-from ..animate import Animation
-from math import sin, cos, tan, pi
+# from ..animate import Animation
+# from math import sin, cos, tan, pi
 
-import numba_scripts.classes
-def mesh_csys_animate(obj: numba_scripts.classes.Csys, t):
-    obj.pos[0] = 0.0 + 10.0 * sin(t / 2)
-    obj.pos[1] = -0.5
-    obj.pos[2] = 6.0 + 5.0 * sin(t / 3)
+# import numba_scripts.classes
+# def mesh_csys_animate(obj: numba_scripts.classes.Csys, t):
+#     obj.pos[0] = 0.0 + 10.0 * sin(t / 2)
+#     obj.pos[1] = -0.5
+#     obj.pos[2] = 6.0 + 5.0 * sin(t / 3)
 
 # scene.animations.append(Animation(scene.meshes[0].csys))
 

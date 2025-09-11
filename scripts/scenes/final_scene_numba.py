@@ -173,19 +173,38 @@ for (i, (f, material)) in enumerate(load_data):
 
     scene.meshes.append(msh1)
 
+
 print(f"There are `{scene.count_triangles()}` triangles in the scene.")
 
-from ..animate import Animation
-from math import sin, cos, tan, pi
+# from ..animate import Animation
+# from math import sin, cos, tan, pi
 
-import numba_scripts.classes
+# import numba_scripts.classes
 
-def mesh_csys_animate(obj: numba_scripts.classes.Csys, t, x0:Vector3):
-    obj._pos[0] = x0[0] + 1.0 * sin(t / 2)
-    obj._pos[1] = x0[1]
-    obj._pos[2] = x0[2] + 1.0 * sin(t / 3)
-    print("here")
+# def mesh_csys_animate(obj: numba_scripts.classes.Csys, t, x0:Vector3):
+#     obj._pos[0] = x0[0] + 1.0 * sin(t / 2)
+#     obj._pos[1] = x0[1]
+#     obj._pos[2] = x0[2] + 1.0 * sin(t / 3)
+#     print("here")
 
-from functools import partial
-scene.animations.append(Animation(scene.meshes[-1].csys, partial(mesh_csys_animate, x0=scene.meshes[0].csys._pos)))
+# from functools import partial
+# scene.animations.append(Animation(scene.meshes[-1].csys, partial(mesh_csys_animate, x0=scene.meshes[0].csys._pos)))
 
+START_CHUNK_SIZE_FRAC = 1.0
+
+base_material = Material(
+    Vector4((1.0, 1.0, 1.0, 1.0), dtype="f4"),
+    Vector3((0.0, 0.0, 0.0), dtype="f4"),
+    smoothness=1.0,
+    specularStrength=0.2,
+    ior=1.0,
+)
+fname = "objects/car_new/rubber.obj"
+
+
+from .chunker import load_chunked_mesh_into_scene
+
+
+r = load_chunked_mesh_into_scene(scene, fname, base_material, car_csys)
+
+pass

@@ -309,14 +309,3 @@ def update_mesh_pos_testing():
     update_triangles_old(triangles_old)
 
     pass
-
-
-
-if __name__ == "__main__":
-    # csys_comparison_testing()
-    # update_mesh_pos_testing()
-    pass
-
-
-
-

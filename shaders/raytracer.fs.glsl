@@ -209,12 +209,28 @@ HitInfo raySphere(Ray ray, vec3 spherePos, float sphereRadius)
 }
 
 
+
 vec3 getEnvironmentLight(Ray ray)
 {
-    // float skyGradientT = pow(smoothstep(0, 0.4, ray.dir.y), 0.35)
-    // vec3 skyGradient = mix(skyColor, )
+    
+    // vec3 skyColor = vec3(0.5, 0.5, 1.0);
+    vec3 skyColor = vec3(3.9216e-03, 6.9020e-01, 8.6275e-01);
+    vec3 skyColor2 = vec3(1.0, 1.0, 1.0);
+    vec3 groundColor = vec3(0.4, 0.4, 0.4);
+    // vec3 groundColor = vec3(1.0, 0.0, 1.0);
+    vec3 sunlightDirection = normalize(vec3(-1.0, 0.2, -1.0));
+    float sunFocus = 100.0;
+    float sunIntensity = 40.0;
 
-    return skyColor;
+    float skyGradientT = pow(smoothstep(0.0, 0.8, ray.dir.y), 0.35);
+    float groundToSkyT = smoothstep(-0.01, 0.0, ray.dir.y);
+
+    vec3 skyGradient = mix(skyColor2, skyColor, skyGradientT);
+    float sun = pow(max(0.0, dot(ray.dir, sunlightDirection)), sunFocus) * sunIntensity;
+    bool sunMask = groundToSkyT >= 1.0;
+
+    return mix(groundColor, skyGradient, groundToSkyT) + sun * float(sunMask);
+
 }
 
 HitInfo rayTriangle(Ray ray, Triangle tri, bool hitBehind)
@@ -335,6 +351,7 @@ void swap(inout float a, inout float b) {
 
 bool boundingBoxIntersect(Ray ray, vec3 bboxMin, vec3 bboxMax)
 {
+    // return true;
     // calculates the boolean intersection between a aabb and a ray
     float tmin = (bboxMin.x - ray.origin.x) / ray.dir.x; 
     float tmax = (bboxMax.x - ray.origin.x) / ray.dir.x; 
@@ -345,9 +362,9 @@ bool boundingBoxIntersect(Ray ray, vec3 bboxMin, vec3 bboxMax)
     float tymax = (bboxMax.y - ray.origin.y) / ray.dir.y; 
 
     if (tymin > tymax) swap(tymin, tymax); 
-
     if ((tmin > tymax) || (tymin > tmax)) 
         return false; 
+
 
     if (tymin > tmin) tmin = tymin; 
     if (tymax < tmax) tmax = tymax; 
@@ -661,6 +678,13 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
 
             else
             {
+                // at equal iors, diffuse only!
+                // if (abs(n1-n2) < 1e-5) 
+                // {
+                //     isSpecularBounce = false;
+                //     specularDir = reflect(ray.dir, hitInfo.normal);
+                //     diffuseDir *= -1;
+                // }       
                 // if greater than the shlickRatio, it refracts successfully and enters the material
                 // refraction of non-transmission will be a diffuse reflection
                 if (randomValue(rngState) > shlickRatio)
@@ -689,11 +713,11 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
                         // if it hits the back side, we must assume it is refracting out into atmosphere
                         // handle transmission of the last hit before performing color calculations
 
-                        // vec3 transmissionColor;
-                        // Material transmissionMaterial = prevmaterial;
-                        // float attenuationCoeff = -log(transmissionMaterial.transmission);
-                        // transmissionColor = transmissionMaterial.color.xyz * exp(-attenuationCoeff* hitInfo.dst);
-                        // rayColor *= transmissionColor * transmissionMaterial.color.w;
+                        vec3 transmissionColor;
+                        Material transmissionMaterial = prevmaterial;
+                        float attenuationCoeff = -log(transmissionMaterial.transmission);
+                        transmissionColor = transmissionMaterial.color.xyz * exp(-attenuationCoeff* hitInfo.dst);
+                        rayColor *= transmissionColor * transmissionMaterial.color.w;
 
                         if (hitInfo.hitBackside)
                         {
@@ -874,7 +898,6 @@ void main()
     // HitInfo hit0 = rayTriangle(ray, getTriangle(0));
     // HitInfo hit1 = rayTriangle(ray, getTriangle(1));
 
-
     if (STATIC_RENDER)
     {
         float weight = 1.0 / (float(frameNumber) + 1);
@@ -888,6 +911,18 @@ void main()
         // , 1.0)
         ;
     }
+    // if (STATIC_RENDER)
+    // {
+    //     if (frameNumber == 0)
+    //     {
+    //         color = vec4(0.0);
+    //         return;
+    //     }
+    //     float alpha = 0.01;
+    //     vec4 prev = texture(previousFrame, (fragPosition.xy + 1.0) / 2);
+    //     vec4 samp = vec4(totalIncomingLight, 1.0);
+    //     color = mix(prev, samp, alpha);
+    // }
     else 
     {
         color = vec4(totalIncomingLight, 1.0)
