@@ -92,7 +92,7 @@ class Application:
         # self.WINDOW_HEIGHT = 1440 // 8
         self.ASPECT_RATIO = 16 / 9
 
-        self.MAX_CYCLES = 2048
+        self.MAX_CYCLES = 2048 * 2048
 
         self.CHUNKSX = 8 // factor
         self.CHUNKSY = 8 // factor
@@ -800,11 +800,11 @@ class RayTracerDynamic(ProgramABC):
             self.screen_prog, self.screen_vbo, "in_pos", "in_uv"
         )
 
-        self.texA = self.context.texture((self.width, self.height), 3)
+        self.texA = self.context.texture((self.width, self.height), 3, dtype="f4")
         self.texA.use(location=0)
 
         # self.fbo = context.framebuffer(color_attachments=[self.texA])
-        self.texB = self.context.texture((self.width, self.height), 3)
+        self.texB = self.context.texture((self.width, self.height), 3, dtype="f4")
 
         self.fboA = context.framebuffer(color_attachments=[self.texA])
         self.fboB = context.framebuffer(color_attachments=[self.texB])
@@ -965,7 +965,7 @@ class RayTracerDynamic(ProgramABC):
             struct.pack("f", CAM_ANTIALIAS_STRENGTH),
         )
 
-        program["ViewParams"].write(cam.view_params.astype("f4"))
+        program["ViewParams"].write(cam.view_params.astype("f4"))   
         program["CamLocalToWorldMatrix"].write(cam.local_to_world_matrix.astype("f4"))
         program["CamGlobalPos"].write(cam.csys.pos.astype("f4"))
 
@@ -998,6 +998,7 @@ class RayTracerDynamic(ProgramABC):
             program["frameNumber"].write(struct.pack("I", 0))
             pass
 
+        print(self.cycle_counter)
         self.shader_rng_counter += 1
 
         self.context.gc()
