@@ -30,6 +30,14 @@ class Csys:
         self.quat = np.array([0, 0, 0, 1], dtype=np.float32)
 
     @property
+    def pos(self):
+        return self._pos
+
+    @pos.setter
+    def pos(self, val):
+        self._pos = val
+
+    @property
     def rotation_matrix(self):
         return mat33_create_from_quaternion(self.quat)
 

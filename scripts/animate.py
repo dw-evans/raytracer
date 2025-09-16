@@ -18,6 +18,16 @@ T = TypeVar("T")
 FuncOfFloat = Callable[[T, float], T]
 
 
+class FrameAnimation:
+    def __init__(self, obj: T, fun: FuncOfFloat) -> None:
+        self.obj = obj
+        self.fun = fun
+
+    def evaluate(self, t: int) -> T:
+        return self.fun(self.obj, t)
+
+
+
 class Animation:
     """
     Class that stores animation information about a scene...

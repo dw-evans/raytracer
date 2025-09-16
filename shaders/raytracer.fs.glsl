@@ -220,7 +220,7 @@ vec3 getEnvironmentLight(Ray ray)
     // vec3 groundColor = vec3(1.0, 0.0, 1.0);
     vec3 sunlightDirection = normalize(vec3(-1.0, 0.2, -1.0));
     float sunFocus = 100.0;
-    float sunIntensity = 40.0;
+    float sunIntensity = 20.0;
 
     float skyGradientT = pow(smoothstep(0.0, 0.8, ray.dir.y), 0.35);
     float groundToSkyT = smoothstep(-0.01, 0.0, ray.dir.y);
@@ -900,7 +900,7 @@ void main()
 
     if (STATIC_RENDER)
     {
-        float weight = 1.0 / (float(frameNumber) + 1);
+        float weight = 1.0 / (float(frameNumber));
         color = 
         texture(previousFrame, (fragPosition.xy + 1.0) / 2) * (1-weight)
         +

@@ -53,7 +53,7 @@ from typing import Generator
 # from scripts.scenes import numba_test_scene
 from scripts.scenes import final_scene_numba
 
-scn = final_scene_numba
+SCENE = final_scene_numba
 
 def reload_scene():
     pass
@@ -131,7 +131,7 @@ class Application:
         )
 
         self.clock = pygame.time.Clock()
-        self.display_scene = scn.scene
+        self.display_scene = SCENE.scene
 
         self.display_scene.validate_mesh_indices()
 
@@ -170,7 +170,7 @@ class Application:
 
         self.is_waiting_to_toggle = False
         self.is_animating = False
-        self.animation_clock = 0.0
+        self.animation_clock = 0
         self.dt = 1 / self.DYNAMIC_RENDER_FRAMERATE
         self.reset_anim_key_pressed = False
         self.pause_play_anim_key_pressed = False
@@ -190,6 +190,7 @@ class Application:
         self.watchdog_is_running = False
 
         # self.display_program = self.programs["raytracer_static"]
+        self.display_program = self.programs["raytracer"]
 
     def start(self):
         self.running = True
@@ -293,7 +294,7 @@ class Application:
                         if not self.reset_anim_key_pressed:
                             self.reset_anim_key_pressed = True
                             self.is_animating = False
-                            self.animation_clock = 0.0
+                            self.animation_clock = 0
                     # J will be used to play/pause
                     elif event.key == pygame.K_j:
                         if not self.pause_play_anim_key_pressed:
@@ -336,6 +337,11 @@ class Application:
             self.display_program.configure_program(self.display_scene)
             self.animation_clock = self.animation_clock + self.dt
 
+    def animate_frame(self, i):
+        if self.is_animating:
+            print(f"Frame Number Animation = {i}")
+            self.display_scene.animate_frame(frame=i)
+            self.display_program.configure_program(self.display_scene)
 
 
     class ShaderHandler(FileSystemEventHandler):
@@ -347,26 +353,27 @@ class Application:
             if not self.app.watchdog_command_waiting and not event.is_directory:
                 print(f"File modified: {event.src_path}, reloading shaders")
                 self.out_fn_waiting = True
-                # func = lambda: self.app.run()
 
                 def out_fn():
-                    print("File Modification occurred, reloading shaders...")
+                    print("File Modification occurred, reloading data...")
+                    print("Reloading shaders...")
                     try:
                         self.app.display_program.initialise()
                         print("Shaders reloaded.")
                     except Exception as e:
-                        print(
-                            f"Error during shader reloading. Check for errors: \n\n{e}\n"
-                        )
-                    self.app.display_program.configure_program(
-                        scene=self.app.display_scene
-                    )
-                    print("Reloading Scene")
-                    # importlib.reload(numba_test_scene)
-                    # self.app.display_scene = numba_test_scene.scene
-                    importlib.reload(scn)
-                    self.app.display_scene = scn.scene
+                        print(f"Error during shader reloading. Check for errors: \n\n{e}\n")
+                    print("Reloading scene...")
+                    try:
+                        importlib.reload(SCENE)
+                    except Exception as e:
+                        print("Warning, error during import")
+                        print(e)
+                
+                    self.app.display_scene = SCENE.scene
                     print("Scene reloaded")
+                    print("Reconfiguring program...")
+                    self.app.display_program.configure_program(scene=self.app.display_scene)
+                    print("Program reconfigured...")
                     print("Re-running application loop.")
                     self.app.run()
 
@@ -379,19 +386,39 @@ class Application:
         paths = [
             "shaders",
         ]
-        paths += list(Path("scripts/scenes").glob("*.py"))
-        for path in paths:
-            observer.schedule(event_handler, path, recursive=False)
-            print(f"Started watching {path} for modifications.")
+        # paths += list(Path("scripts/scenes").glob("*.py"))
+        # for path in paths:
+        #     observer.schedule(event_handler, path, recursive=False)
+        #     print(f"Started watching {path} for modifications.")
+
+
+        class Ehandler(FileSystemEventHandler):
+            def on_modified(self, event):
+                if not Path(event.src_path).resolve().__str__().lower() == SCENE.__file__.lower():
+                    return
+                # try:
+                #     importlib.reload(SCENE)
+                # except Exception as e:
+                #     print("Warning, error during import")
+                #     print(e)
+                #     # time.sleep(5.0)
+                event_handler.on_modified(event=event)
+
+
+        observer2 = Observer()
+        observer2.schedule(Ehandler(), Path(SCENE.__file__).parent, recursive=False)
 
         observer.start()
+        observer2.start()
 
         try:
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
             observer.stop()
+            observer2.stop()
         observer.join()
+        observer2.join()
 
 
 class ProgramABC(ABC):
@@ -749,7 +776,7 @@ class RayTracerDynamic(ProgramABC):
             require,
         )
         self.MAX_RAY_BOUNCES = 1
-        self.RAYS_PER_PIXEL = 1
+        self.RAYS_PER_PIXEL = 8
 
         self.sphere_buffer_binding = 1
         self.is_scene_static = True
@@ -809,7 +836,7 @@ class RayTracerDynamic(ProgramABC):
         self.fboA = context.framebuffer(color_attachments=[self.texA])
         self.fboB = context.framebuffer(color_attachments=[self.texB])
 
-        self.frame_counter = 0
+        # self.frame_counter = 0
         self.cycle_counter = 0
         self.shader_rng_counter = 0
 
@@ -844,11 +871,16 @@ class RayTracerDynamic(ProgramABC):
 
         print(f"Updating Triangle Positions...")
         # numba_scripts.classes.update_triangles_to_csys(triangles, scene.meshes[0].csys)
-        timer(numba_scripts.classes.update_triangles_to_csys)(
-            triangles, scene.meshes[0].csys
-        )
+        # timer(numba_scripts.classes.update_triangles_to_csys)(
+        #     triangles, scene.meshes[0].csys
+        # )
+
+        for mesh in scene.meshes:
+            numba_scripts.classes.update_triangles_to_csys(mesh.triangles, mesh.csys)
+
 
         print(f"Loading triangles into SSBO...")
+
         # triangle_data = numba_scripts.classes.triangles_to_array(triangles)
         triangle_data = timer(numba_scripts.classes.triangles_to_array)(triangles)
         # triangle_data = numba_scripts.classes.many_triangles_to_bytes(triangles)
@@ -881,6 +913,13 @@ class RayTracerDynamic(ProgramABC):
         program["chunksy"].write(struct.pack("i", 1))
 
         program["MAX_CYCLES"].write(struct.pack("i", self.app.MAX_CYCLES))
+
+        self.app.is_animating = True
+        if not "frame_counter" in self.__dir__():
+            self.frame_counter = 0
+
+        pass
+        # self.frame_counter = 0
 
     def calculate_frame_via_chunking(self, scene: Scene, flip: bool = True):
         import gc
@@ -940,13 +979,29 @@ class RayTracerDynamic(ProgramABC):
         return
 
     def calculate_frame(self, scene: Scene):
-
+        import time
         vao = self.vao
         program = self.program
         context = self.context
         cam = scene.cam
 
         spheres = scene.spheres
+
+        # framerate = 10
+        # if not "time_of_last_frame_render_ns" in self.__dir__():
+        #     self.time_of_last_frame_render_ns = 0
+        # if (time.time_ns() - self.time_of_last_frame_render_ns) > 1 / framerate * 1e9:
+        if self.frame_counter > 60:
+            self.frame_counter = 0
+        # self.time_of_last_frame_render_ns = time.time_ns()
+        self.frame_counter += 1
+        self.app.animate_frame(self.frame_counter)
+        # self.cycle_counter = 0
+
+        time.sleep(0.1)
+
+
+        pass
 
         self.program["MAX_BOUNCES"].write(struct.pack("i", self.MAX_RAY_BOUNCES))
 
@@ -998,7 +1053,7 @@ class RayTracerDynamic(ProgramABC):
             pass
 
         print(self.cycle_counter)
-        self.shader_rng_counter += 1
+        self.cycle_counter += 1
 
         self.context.gc()
 
@@ -1373,6 +1428,12 @@ class RayTracerStatic(ProgramABC):
 
         spheres = scene.spheres
 
+        # if self.cycle_counter >= self.CYCLES_PER_FRAME:
+        #     self.app.save_frame()
+        #     self.app.animate_next()
+        #     self.cycle_counter = 0
+        #     self.frame_counter += 1
+
         self.program["MAX_BOUNCES"].write(struct.pack("i", self.MAX_RAY_BOUNCES))
 
         CAM_DEPTH_OF_FIELD_STRENGTH = 0.000
@@ -1441,6 +1502,7 @@ class RayTracerStatic(ProgramABC):
             # img = functions.buffer_to_image(buffer, size)
             # img.save(self.target_dir / f"{self.frame_counter:05}_{self.cycle_counter:05}.png")
 
+        
 
         return
 

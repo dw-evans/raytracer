@@ -5,7 +5,9 @@ from ..classes import (
     Sphere,
     Material,
     Csys,
+    Camera,
 )
+from ..animate import Animation, FrameAnimation
 
 import pyrr
 from pyrr import (
@@ -33,6 +35,10 @@ material_blue = Material(
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
     smoothness=0.0,
 )
+
+material_rear_wall_animated = Material()
+
+
 material_green = Material(
     Vector4((0.0, 1.0, 0.0, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
@@ -95,11 +101,19 @@ scene.atmosphere_material = atmosphere_material
 meshes = []
 
 
-material_subject = Material(
-    color=Vector4((1.0, 0.3, 0.6, 1.0)),
+# material_subject = Material(
+#     color=Vector4((1.0, 0.3, 0.6, 1.0)),
+#     smoothness=1.0,
+#     transmission=0.0,
+#     ior=1.6,
+# )
+
+material_red_1 = Material(
+    Vector4((1.0, 1.0, 1.0, 1.0), dtype="f4"),
+    Vector3((0.0, 0.0, 0.0), dtype="f4"),
     smoothness=1.0,
-    transmission=0.0,
-    ior=1.6,
+    specularStrength=0.2,
+    ior=1.0,
 )
 
 load_data = [
@@ -108,10 +122,10 @@ load_data = [
     ("objects/old/final_scene/wall_top.obj", material_white_passthrough),
     ("objects/old/final_scene/wall_bottom.obj", material_white_passthrough),
     # ("objects/old/final_scene/wall_front.obj", material_blue_passthrough),
-    ("objects/old/final_scene/wall_back.obj", material_blue_passthrough),
+    ("objects/old/final_scene/wall_back.obj", material_rear_wall_animated),
     ("objects/old/final_scene/light.obj", material_light_source_1),
     # ("objects/old/final_scene/subject.obj", material_subject),
-    # ("objects/old/heart.obj", material_subject),
+    (monkey_file:="objects/monkey.obj", material_red_1),
 
 ]
 
@@ -133,20 +147,21 @@ material_red_1 = Material(
 
 
 car_csys = numba_scripts.classes.Csys()
-car_csys._pos = np.array([0.0, 1.0, 8.0], dtype=np.float32)
+# car_csys._pos = np.array([0.0, 1.0, 8.0], dtype=np.float32)
+car_csys._pos = np.array([0.0, 0.0, 0.0], dtype=np.float32)
 car_csys.ryg(180)
 
 spheres = [
-    Sphere(
-        pos=car_csys._pos + np.array([0.0, 1.5, 0.0]),
-        radius=1.0,
-        material=material_red_1,
-    ),
+    # Sphere(
+    #     pos=car_csys._pos + np.array([0.0, 1.5, 0.0]),
+    #     radius=1.0,
+    #     material=material_red_1,
+    # ),
 ]
 
 scene.spheres = spheres
 
-scene.cam.csys.pos = pyrr.Vector3([0.0, 2.0, 0.0])
+# scene.cam.csys._pos = np.array([0.0, 2.0, 0.0], dtype=np.float32)
 
 for (i, (f, material)) in enumerate(load_data):
     msh = trimesh.load(f)
@@ -168,10 +183,17 @@ for (i, (f, material)) in enumerate(load_data):
     msh1 = Mesh(material=material)
 
     msh1.csys = car_csys
+    if f == monkey_file:
+        monkey_mesh = msh1
+        monkey_mesh.csys = Csys()
+        # monkey_mesh.csys._pos = np.array([0.0, 1.0])
 
     msh1.triangles = triangles
 
     scene.meshes.append(msh1)
+
+
+
 
 
 print(f"There are `{scene.count_triangles()}` triangles in the scene.")
@@ -192,19 +214,90 @@ print(f"There are `{scene.count_triangles()}` triangles in the scene.")
 
 START_CHUNK_SIZE_FRAC = 1.0
 
-base_material = Material(
-    Vector4((1.0, 1.0, 1.0, 1.0), dtype="f4"),
-    Vector3((0.0, 0.0, 0.0), dtype="f4"),
-    smoothness=1.0,
-    specularStrength=0.2,
-    ior=1.0,
-)
-fname = "objects/car_new/rubber.obj"
+# base_material = Material(
+#     Vector4((1.0, 1.0, 1.0, 1.0), dtype="f4"),
+#     Vector3((0.0, 0.0, 0.0), dtype="f4"),
+#     smoothness=1.0,
+#     specularStrength=0.2,
+#     ior=1.0,
+# )
+# fname = "objects/car_new/rubber.obj"
+
+# from .chunker import load_chunked_mesh_into_scene
+
+# r = load_chunked_mesh_into_scene(scene, fname, base_material, car_csys)
 
 
-from .chunker import load_chunked_mesh_into_scene
+keyframes_fp = Path() / "blender/camera_keyframes.csv"
+import pandas as pd
+keyframes_df = pd.read_csv(keyframes_fp)
+from math import radians, degrees, sin, cos, pi
+
+time_injectino_modified = 0.0
+import time
+import importlib
+from . import injection
+def animate_camera(obj:Camera, i):
+    row = keyframes_df.iloc[i]
+
+    obj.csys.set_pos([row["Location Y"], row["Location Z"], -row["Location X"]])
+    obj.csys.quat = np.array([0, 0, 0, 1], dtype=np.float32)
+    obj.csys.rxp(degrees(row["Rotation Y"]))
+    obj.csys.ryp(degrees(row["Rotation Z"]-pi/2))
+    obj.csys.rxp(degrees(row["Rotation X"]-pi/2))
 
 
-r = load_chunked_mesh_into_scene(scene, fname, base_material, car_csys)
+def animate_monkey(obj:Mesh, i):
+    obj.csys.set_pos([0.0, 0.0, 0.0])
+    obj.csys._pos = np.array([0.0, 1.0 + 0.2*sin(2*pi * i/60), 0.0], dtype=np.float32)
+    obj.csys.quat = np.array([0, 0, 0, 1], dtype=np.float32)
+    obj.csys.ryg(0 + 180 + 5 *i)
+    obj.csys.rxp(30)
+    # t = triangles[0]
+    # p0 = t.positions
+    # numba_scripts.classes.update_triangles_to_csys(obj.triangles, obj.csys)
+    # p1 = t.positions
+
+    pass
+    
+
+
+
+def smoothstep(edge0, edge1, x):
+    # normalize x to [0, 1]
+    t = np.clip((x - edge0) / (edge1 - edge0), 0.0, 1.0)
+    return t * t * (3 - 2 * t)
+
+
+def animate_rear_material(obj:Material, i):
+    edge0 = 0
+    edge1 = 30
+    mat1 = Material(
+        Vector4((0.0, 0.0, 1.0, 1.0), dtype="f4"),
+        Vector3((0.0, 0.0, 0.0), dtype="f4"),
+        smoothness=0.0,
+    )
+    mat2 = Material(
+        Vector4((1.0, 1.0, 0.0, 1.0), dtype="f4"),
+        Vector3((0.0, 0.0, 0.0), dtype="f4"),
+        smoothness=1.0,
+    )
+
+    ss = smoothstep(edge0, edge1, i)
+
+    obj.smoothness = (1-ss) * mat1.smoothness + ss * mat2.smoothness
+    obj.color = (1-ss) * mat1.color + ss * mat2.color
+
+    pass
+
+
+scene.animations.append(FrameAnimation(scene.cam, animate_camera))
+scene.animations.append(FrameAnimation(monkey_mesh, animate_monkey))
+scene.animations.append(FrameAnimation(material_rear_wall_animated, animate_rear_material))
+
+animate_camera(scene.cam, 0)
+animate_monkey(monkey_mesh, 0)
+animate_rear_material(material_rear_wall_animated, 0)
+
 
 pass
