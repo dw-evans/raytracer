@@ -37,15 +37,20 @@ material_blue = Material(
 )
 
 material_rear_wall_animated = Material()
-
+material_front_wall_animated = Material()
 
 material_green = Material(
     Vector4((0.0, 1.0, 0.0, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
     smoothness=0.0,
 )
-material_white = Material(
-    Vector4((1.0, 0, 0, 1.0), dtype="f4"),
+material_white_upper = Material(
+    Vector4((1.0, 1.0, 1.0, 1.0), dtype="f4"),
+    Vector3((0.0, 0.0, 0.0), dtype="f4"),
+    smoothness=0.0,
+)
+material_white_lower = Material(
+    Vector4((1.0, 1.0, 1.0, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
     smoothness=0.0,
 )
@@ -116,40 +121,25 @@ material_red_1 = Material(
     ior=1.0,
 )
 
-load_data = [
-    ("objects/old/final_scene/wall_left.obj", material_red_passthrough),
-    ("objects/old/final_scene/wall_right.obj", material_green_passthrough),
-    ("objects/old/final_scene/wall_top.obj", material_white_passthrough),
-    ("objects/old/final_scene/wall_bottom.obj", material_white_passthrough),
-    # ("objects/old/final_scene/wall_front.obj", material_blue_passthrough),
-    ("objects/old/final_scene/wall_back.obj", material_rear_wall_animated),
-    ("objects/old/final_scene/light.obj", material_light_source_1),
-    # ("objects/old/final_scene/subject.obj", material_subject),
-    (monkey_file:="objects/monkey.obj", material_red_1),
+csys0 = numba_scripts.classes.Csys()
 
+load_data = [
+    ("objects/old/final_scene/wall_left.obj", material_red, csys0),
+    ("objects/old/final_scene/wall_right.obj", material_green, csys0),
+    ("objects/old/final_scene/wall_top.obj", material_white_upper, csys0),
+    ("objects/old/final_scene/wall_bottom.obj", material_white_lower, csys0),
+    ("objects/old/final_scene/wall_front.obj", material_front_wall_animated, csys0),
+    ("objects/old/final_scene/wall_back.obj", material_rear_wall_animated, csys0),
+    ("objects/old/final_scene/light.obj", material_light_source_1, csys0),
+    # ("objects/old/final_scene/subject.obj", material_subject),
+    (monkey_file:="objects/monkey.obj", material_red_1, Csys()),
 ]
 
-material_red_1 = Material(
-    Vector4((1.0, 1.0, 1.0, 1.0), dtype="f4"),
-    Vector3((0.0, 0.0, 0.0), dtype="f4"),
-    smoothness=1.0,
-    specularStrength=0.2,
-    ior=1.0,
-)
-
-# material_red_2 = Material(
-#     Vector4((1.0, 0.0, 0.0, 1.0), dtype="f4"),
-#     Vector3((0.0, 0.0, 0.0), dtype="f4"),
-#     smoothness=1.0,
-#     ior=1.5,
-# )
 
 
-
-car_csys = numba_scripts.classes.Csys()
 # car_csys._pos = np.array([0.0, 1.0, 8.0], dtype=np.float32)
-car_csys._pos = np.array([0.0, 0.0, 0.0], dtype=np.float32)
-car_csys.ryg(180)
+csys0._pos = np.array([0.0, 0.0, 0.0], dtype=np.float32)
+csys0.ryg(180)
 
 spheres = [
     # Sphere(
@@ -163,7 +153,7 @@ scene.spheres = spheres
 
 # scene.cam.csys._pos = np.array([0.0, 2.0, 0.0], dtype=np.float32)
 
-for (i, (f, material)) in enumerate(load_data):
+for (i, (f, material, csys)) in enumerate(load_data):
     msh = trimesh.load(f)
 
     vertex_indices_arr = msh.faces.astype(np.int32)
@@ -182,11 +172,9 @@ for (i, (f, material)) in enumerate(load_data):
 
     msh1 = Mesh(material=material)
 
-    msh1.csys = car_csys
+    msh1.csys = csys
     if f == monkey_file:
         monkey_mesh = msh1
-        monkey_mesh.csys = Csys()
-        # monkey_mesh.csys._pos = np.array([0.0, 1.0])
 
     msh1.triangles = triangles
 
@@ -278,26 +266,104 @@ def animate_rear_material(obj:Material, i):
         smoothness=0.0,
     )
     mat2 = Material(
-        Vector4((1.0, 1.0, 0.0, 1.0), dtype="f4"),
+        Vector4((1.0, 1.0, 1.0, 1.0), dtype="f4"),
         Vector3((0.0, 0.0, 0.0), dtype="f4"),
         smoothness=1.0,
+        specularStrength=1.0
     )
 
     ss = smoothstep(edge0, edge1, i)
-
+    
     obj.smoothness = (1-ss) * mat1.smoothness + ss * mat2.smoothness
     obj.color = (1-ss) * mat1.color + ss * mat2.color
+    obj.specularStrength = (1-ss) * mat1.specularStrength + ss * mat2.specularStrength
+    
+    # obj.transmission = ss
 
     pass
 
+_i_end:int = None
+_mat1:Material = None
+_mat2:Material = None
 
+def animate_front_material(obj:Material, i):
+    global _i_end
+    global _mat1
+    global _mat2
+
+    obj.transparent_from_behind = True
+    transmission = 0.0
+
+    if i < 30:
+        # No wall to a blue wall
+        edge0 = 25
+        edge1 = 30
+        ss = smoothstep(edge0, edge1, i)
+        obj.color = Vector4((1.0, 1.0, 1.0, 1.0))
+        obj.transparent_from_behind = True
+
+        _mat1 = Material(
+            Vector4((0.0, 0.0, 1.0, 0.0), dtype="f4"),
+            Vector3((0.0, 0.0, 0.0), dtype="f4"),
+        )
+        _mat2 = Material(
+            Vector4((0.0, 0.0, 0.8, 1.0), dtype="f4"),
+            Vector3((0.0, 0.0, 0.0), dtype="f4"),
+            smoothness=0.0,
+        )
+        obj.color = (1-ss) * _mat1.color + ss * _mat2.color
+
+
+    # elif i < 150:
+    else:
+        # blue wall to a mirror
+        edge0 = 45
+        edge1 = 60
+        ss = smoothstep(edge0, edge1, i)
+
+        _mat1 = Material(
+            Vector4((0.0, 0.0, 0.8, 1.0), dtype="f4"),
+            Vector3((0.0, 0.0, 0.0), dtype="f4"),
+            smoothness=0.0,
+        )
+        _mat2 = Material(
+            Vector4((1.0, 1.0, 1.0, 1.0), dtype="f4"),
+            Vector3((0.0, 0.0, 0.0), dtype="f4"),
+            smoothness=1.0,
+            specularStrength=1.0
+        )
+        obj.color = (1-ss) * _mat1.color + ss * _mat2.color
+        obj.smoothness = (1-ss) * _mat1.smoothness + ss * _mat2.smoothness
+        obj.specularStrength = (1-ss) * _mat1.specularStrength + ss * _mat2.specularStrength
+
+        pass
+
+
+def animate_internal_materials_specular_partial(obj:Material, i:int, edge0:int, edge1:int, mat0:Material):
+    ss = smoothstep(edge0, edge1, i)
+    # obj.color = (1-ss) * mat0.color + ss * _mat2.color
+    obj.specularStrength = (1-ss) * mat0.specularStrength + (1.0-mat0.specularStrength) * ss
+    obj.specularColor = ((1-ss) * Vector3((1.0, 1.0, 1.0)) + ss * Vector3(mat0.color.xyz)).normalized
+    obj.smoothness = (1-ss) * mat0.smoothness + (0.99-mat0.smoothness) * ss
+    pass
+
+
+import copy
 scene.animations.append(FrameAnimation(scene.cam, animate_camera))
 scene.animations.append(FrameAnimation(monkey_mesh, animate_monkey))
 scene.animations.append(FrameAnimation(material_rear_wall_animated, animate_rear_material))
+scene.animations.append(FrameAnimation(material_front_wall_animated, animate_front_material))
+from functools import partial
+scene.animations.append(FrameAnimation(material_red, partial(animate_internal_materials_specular_partial, edge0=20, edge1=45, mat0=copy.deepcopy(material_red))))
+scene.animations.append(FrameAnimation(material_green, partial(animate_internal_materials_specular_partial, edge0=25, edge1=50, mat0=copy.deepcopy(material_green))))
+scene.animations.append(FrameAnimation(material_white_upper, partial(animate_internal_materials_specular_partial, edge0=25, edge1=50, mat0=copy.deepcopy(material_white_upper))))
+scene.animations.append(FrameAnimation(material_white_lower, partial(animate_internal_materials_specular_partial, edge0=30, edge1=55, mat0=copy.deepcopy(material_white_lower))))
+
 
 animate_camera(scene.cam, 0)
 animate_monkey(monkey_mesh, 0)
 animate_rear_material(material_rear_wall_animated, 0)
+animate_front_material(material_front_wall_animated, 0)
 
 
 pass

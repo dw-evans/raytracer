@@ -775,8 +775,8 @@ class RayTracerDynamic(ProgramABC):
             standalone,
             require,
         )
-        self.MAX_RAY_BOUNCES = 1
-        self.RAYS_PER_PIXEL = 8
+        self.MAX_RAY_BOUNCES = 8
+        self.RAYS_PER_PIXEL = 32
 
         self.sphere_buffer_binding = 1
         self.is_scene_static = True
@@ -921,7 +921,7 @@ class RayTracerDynamic(ProgramABC):
         pass
         # self.frame_counter = 0
 
-    def calculate_frame_via_chunking(self, scene: Scene, flip: bool = True):
+    def calculate_frame_via_chunking(self, scene: Scene, chunksx = 1, chunksy = 1):
         import gc
 
         gc.disable()
@@ -931,11 +931,13 @@ class RayTracerDynamic(ProgramABC):
         cam = scene.cam
 
         time_of_last_render = time.time_ns()
-        time_between_renders = 1 / 144 * 1e9
+        time_between_renders = 1 / 30 * 1e9
         _t = time_of_last_render
 
-        for i in range(self.app.CHUNKSX):
-            for j in range(self.app.CHUNKSY):
+        program["chunksx"].write(struct.pack("i", chunksx))
+        program["chunksy"].write(struct.pack("i", chunksy))
+        for i in range(chunksx):
+            for j in range(chunksy):
                 program["chunkx"].write(struct.pack("i", i))
                 program["chunky"].write(struct.pack("i", j))
 
@@ -978,6 +980,41 @@ class RayTracerDynamic(ProgramABC):
 
         return
 
+    def save_frame(self):
+        if not "target_dir" in self.__dir__():
+            self.target_dir = (
+                Path()
+                / "renders/RayTracerDynamic"
+                / f"{datetime.datetime.now().strftime("%Y.%m.%d_%H%M%S")}"
+            )
+            self.target_dir.mkdir(parents=True)
+
+        # buffer = self.fboB.read(components=3, dtype="f1")
+        buffer = self.fboB.read(components=3, dtype="f4")
+        hdr_data = np.frombuffer(buffer, dtype=np.float32)
+        hdr_data = hdr_data.reshape((self.height, self.width, 3))
+        
+        rgb = np.clip(hdr_data, 0.0, 1.0)
+        rgb_flipped = np.flip(rgb, axis=0)
+        rgb_display = rgb_flipped
+        display_8bit = (rgb_display[..., :3] * 255).astype(np.uint8)
+        import imageio
+        imageio.imwrite(self.target_dir / f"{self.frame_counter:05}_{self.cycle_counter:05}.png", display_8bit, format="png")
+        pass
+
+    def calculate_frame_no_chunk(self):
+        self.texB.use(location=1)
+        self.fboA.use()
+        self.vao.render(mode=moderngl.TRIANGLE_STRIP)
+
+        self.context.screen.use()
+        self.texA.use(location=0)
+        self.screen_prog["uTexture"].value = 0
+        self.screen_vao.render(mode=moderngl.TRIANGLE_STRIP)
+
+        self.fboA, self.fboB = self.fboB, self.fboA
+        self.texA, self.texB = self.texB, self.texA
+
     def calculate_frame(self, scene: Scene):
         import time
         vao = self.vao
@@ -998,7 +1035,7 @@ class RayTracerDynamic(ProgramABC):
         self.app.animate_frame(self.frame_counter)
         # self.cycle_counter = 0
 
-        time.sleep(0.1)
+        # time.sleep(0.1)
 
 
         pass
@@ -1020,28 +1057,22 @@ class RayTracerDynamic(ProgramABC):
 
         # program["chunksx"].write(struct.pack("i", 2))
         # program["chunksy"].write(struct.pack("i", 2))
-
         # program["chunkx"].write(struct.pack("i", 0))
         # program["chunky"].write(struct.pack("i", 0))
 
-        self.texB.use(location=1)
-        self.fboA.use()
-        self.vao.render(mode=moderngl.TRIANGLE_STRIP)
+        # self.cycle_counter = 0
+        # program["frameNumber"].write(struct.pack("I", self.cycle_counter))
+        # self.calculate_frame_no_chunk()
+        # pygame.display.flip()
 
-        self.context.screen.use()
-        self.texA.use(location=0)
-        self.screen_prog["uTexture"].value = 0
-        self.screen_vao.render(mode=moderngl.TRIANGLE_STRIP)
-
-        self.fboA, self.fboB = self.fboB, self.fboA
-        self.texA, self.texB = self.texB, self.texA
-
-        pygame.display.flip()
-
-        # self.calculate_frame_via_chunking(scene)
-
-        # render_data = context.screen.read(components=3, dtype="f1")
-        # self.texB.write(render_data)
+        self.cycle_counter = 0
+        passes_per_frame = 1
+        for i in range(passes_per_frame):
+            self.cycle_counter += 1
+            program["frameNumber"].write(struct.pack("I", self.cycle_counter))
+            self.calculate_frame_via_chunking(scene, chunksx=1, chunksy=1)
+            self.save_frame()
+            time.sleep(0.03)
 
         if self.is_scene_static:
             self.cycle_counter += 1
@@ -1053,7 +1084,6 @@ class RayTracerDynamic(ProgramABC):
             pass
 
         print(self.cycle_counter)
-        self.cycle_counter += 1
 
         self.context.gc()
 
