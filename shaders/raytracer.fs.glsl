@@ -827,6 +827,11 @@ void main()
     bool inx = (fragAbsPos.x >= (chunkx / float(chunksx))) && (fragAbsPos.x < ((chunkx + 1) / float(chunksx)));
     bool iny = (fragAbsPos.y >= (chunky / float(chunksy))) && (fragAbsPos.y < ((chunky + 1) / float(chunksy)));
 
+    // bool inx =  (fragAbsPos.x >= (chunkx / float(chunksx))) &&
+    //             (fragAbsPos.x <= (chunkx + 1) / float(chunksx));
+    // bool iny =  (fragAbsPos.y >= (chunky / float(chunksy))) &&
+    //             (fragAbsPos.y <= (chunky + 1) / float(chunksy));
+
 
     // if not in x or y, color is the sample of the previous texture (black or previous render.)
     // if (!(inx && iny)) {

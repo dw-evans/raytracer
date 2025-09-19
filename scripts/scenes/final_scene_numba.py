@@ -132,6 +132,7 @@ load_data = [
     ("objects/old/final_scene/wall_back.obj", material_rear_wall_animated, csys0),
     ("objects/old/final_scene/light.obj", material_light_source_1, csys0),
     # ("objects/old/final_scene/subject.obj", material_subject),
+    # (monkey_file:="objects/monkey.obj", material_red_1, numba_scripts.classes.Csys()),
     (monkey_file:="objects/monkey.obj", material_red_1, Csys()),
 ]
 
@@ -347,23 +348,56 @@ def animate_internal_materials_specular_partial(obj:Material, i:int, edge0:int, 
     obj.smoothness = (1-ss) * mat0.smoothness + (0.99-mat0.smoothness) * ss
     pass
 
+def animate_camera_params(obj:Camera, i:int):
+    # obj.depth_of_field_strength = 0.02
+    # obj.depth_of_field_strength = 0.1
+    obj.depth_of_field_strength = 0.005
+    obj.antialias_strength = 0.001
+    # obj.near_plane = 8.5
+    obj.near_plane = Vector3(monkey_mesh.csys.pos - obj.csys.pos).squared_length ** 0.5
+    obj.bounces_per_ray = 4
+    obj.rays_per_pixel = 1
+    obj.passes_per_frame = 20
+    obj.chunksx = 1
+    obj.chunksy = 1
+    
+    # add chunking
+    # def check():
+    #     (obj.bounces_per_ray * obj.rays_per_pixel * obj.passes_per_frame / obj.chunksx / obj.chunksy) > 8
+
+    # while not check():
+    #     obj.rays_per_pixel -= 1
+
+    # obj.aspect
+    # obj.fov
+
+def get_frame_number(obj: Scene, i):
+    i = i
+    # i = 60
+    obj.frame_number = i
+    return obj.frame_number
+
 
 import copy
+from functools import partial
+scene.animations.append(FrameAnimation(scene, get_frame_number))
+
 scene.animations.append(FrameAnimation(scene.cam, animate_camera))
 scene.animations.append(FrameAnimation(monkey_mesh, animate_monkey))
 scene.animations.append(FrameAnimation(material_rear_wall_animated, animate_rear_material))
 scene.animations.append(FrameAnimation(material_front_wall_animated, animate_front_material))
-from functools import partial
 scene.animations.append(FrameAnimation(material_red, partial(animate_internal_materials_specular_partial, edge0=20, edge1=45, mat0=copy.deepcopy(material_red))))
 scene.animations.append(FrameAnimation(material_green, partial(animate_internal_materials_specular_partial, edge0=25, edge1=50, mat0=copy.deepcopy(material_green))))
 scene.animations.append(FrameAnimation(material_white_upper, partial(animate_internal_materials_specular_partial, edge0=25, edge1=50, mat0=copy.deepcopy(material_white_upper))))
 scene.animations.append(FrameAnimation(material_white_lower, partial(animate_internal_materials_specular_partial, edge0=30, edge1=55, mat0=copy.deepcopy(material_white_lower))))
+scene.animations.append(FrameAnimation(scene.cam, animate_camera_params))
 
 
 animate_camera(scene.cam, 0)
 animate_monkey(monkey_mesh, 0)
 animate_rear_material(material_rear_wall_animated, 0)
 animate_front_material(material_front_wall_animated, 0)
+animate_front_material(scene.cam, 0)
 
 
 pass

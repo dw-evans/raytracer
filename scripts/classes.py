@@ -379,6 +379,14 @@ class Camera:
         # self.yaw = 0.0
 
         self.csys = Csys()
+        self.antialias_strength = 0.0
+        self.depth_of_field_strength = 0.0
+        self.rays_per_pixel = 1
+        self.bounces_per_ray = 1
+        self.passes_per_frame = 1
+        self.chunksx = 2
+        self.chunksy = 2
+        self.cycle_counter = 0
 
 
     @property
@@ -418,161 +426,6 @@ class Camera:
         )
 
 
-
-# class Csys:
-#     def __init__(self):
-#         self.pos = Vector3((0.0, 0.0, 0.0))
-#         self.quat = pyrr.Quaternion()
-
-#     def set_pos(self, p) -> Csys:
-#         val = np.array(p, dtype=np.float32)
-#         if not val.shape == (3,):
-#             raise ValueError("must provide (3,) vector")
-#         self.pos = val
-#         return self
-    
-#     def set_rot_euler(self, p_rad) -> Csys:
-#         val = np.array(p_rad)
-#         x = pyrr.quaternion.create_from_eulers(val)
-#         self.quat = pyrr.quaternion.create_from_eulers(val)
-#         return self
-
-#     @property
-#     def rotation_matrix(self) -> Matrix33:
-#         """returns just the orientation matrix"""
-#         # raise NotImplementedError
-#         return Matrix33(pyrr.matrix33.create_from_quaternion(self.quat))
-
-#     @property
-#     def transformation_matrix(self) -> Matrix44:
-#         """Returns the rotation translation Mat44 from the postion and quat"""
-#         ret = pyrr.matrix44.create_from_quaternion(self.quat)
-#         ret[3][0:3] = self.pos
-#         ret = Matrix44(ret, dtype="f4")
-#         return ret
-
-#     def __str__(self) -> str:
-#         return self.transformation_matrix.__str__()
-
-#     def __repr__(self) -> str:
-#         scale, rotate, translate = self.transformation_matrix.decompose()
-#         return f"Csys(\nscale={scale}\nrotate={rotate}\ntranslate={translate}\n{self.transformation_matrix.__str__()}\n)"
-
-#     @property
-#     def scale(self):
-#         # TODO implement scaling to the meshes in this way potentially?
-#         raise NotImplementedError
-#         scale, _ = self.transformation_matrix.decompose()
-#         return scale
-
-#     def rxp(self, degrees: float) -> Csys:
-#         """Rotate about x' axis"""
-#         rad = radians(degrees)
-#         ax = Vector3(self.rotation_matrix.r1)
-#         self.quat = self.quat * pyrr.Quaternion(
-#             pyrr.quaternion.create_from_axis_rotation(ax, rad)
-#         )
-#         return self
-
-#     def ryp(self, degrees: float) -> Csys:
-#         """Rotate about y' axis"""
-#         rad = radians(degrees)
-#         ax = Vector3(self.rotation_matrix.r2)
-#         self.quat = self.quat * pyrr.Quaternion(
-#             pyrr.quaternion.create_from_axis_rotation(ax, rad)
-#         )
-#         return self
-
-#     def rzp(self, degrees: float) -> Csys:
-#         """Rotate about z' axis"""
-#         rad = radians(degrees)
-#         ax = Vector3(self.rotation_matrix.r3)
-#         self.quat = self.quat * pyrr.Quaternion(
-#             pyrr.quaternion.create_from_axis_rotation(ax, rad)
-#         )
-#         return self
-
-#     def rxg(self, degrees: float) -> Csys:
-#         """Rotate about x global axis"""
-#         rad = radians(degrees)
-#         ax = Vector3((1.0, 0.0, 0.0))
-#         self.quat = self.quat * pyrr.Quaternion(
-#             pyrr.quaternion.create_from_axis_rotation(ax, rad)
-#         )
-#         return self
-
-#     def ryg(self, degrees: float) -> Csys:
-#         """Rotate about y global axis"""
-#         rad = radians(degrees)
-#         ax = Vector3((0.0, 1.0, 0.0))
-#         self.quat = self.quat * pyrr.Quaternion(
-#             pyrr.quaternion.create_from_axis_rotation(ax, rad)
-#         )
-#         return self
-
-#     def rzg(self, degrees: float) -> Csys:
-#         """Rotate about z global axis"""
-#         rad = radians(degrees)
-#         ax = Vector3((0.0, 0.0, 1.0))
-#         self.quat = self.quat * pyrr.Quaternion(
-#             pyrr.quaternion.create_from_axis_rotation(ax, rad)
-#         )
-#         return self
-
-#     def tg(self, vec: Vector3) -> Csys:
-#         """Translate incrementally global"""
-#         x = vec
-#         ax = Matrix33.identity()
-#         self.pos = ax * x
-#         return self
-
-#     def tp(self, vec: Vector3) -> Csys:
-#         """Translate incrementally local"""
-#         x = vec
-#         ax = self.rotation_matrix
-#         self.pos = ax * x
-#         return self
-
-#     def txp(self, dst: float) -> Csys:
-#         ax = Vector3(self.rotation_matrix.r1)
-#         print(f"txp: {dst * ax}")
-#         self.pos += dst * ax
-#         return self
-
-#     def typ(self, dst: float) -> Csys:
-#         ax = Vector3(self.rotation_matrix.r2)
-#         self.pos += dst * ax
-#         return self
-
-#     def tzp(self, dst: float) -> Csys:
-#         ax = Vector3(self.rotation_matrix.r3)
-#         print(f"tzp: {dst * ax}")
-#         self.pos += dst * ax
-#         return self
-
-#     def txg(self, dst: float) -> Csys:
-#         self.pos.x += dst
-#         return self
-
-#     def tyg(self, dst: float) -> Csys:
-#         self.pos.y += dst
-#         return self
-
-#     def tzg(self, dst: float) -> Csys:
-#         self.pos.z += dst
-#         return self
-
-#     # def move_to(self, vec: Vector3) -> Csys:
-#     #     self.pos = vec
-#     #     return self
-
-#     # def txp(self, dst: float) -> Csys:
-#     #     """translate"""
-#     #     ax = self.rotation_matrix.r1
-#     #     self.pos += Vector3(ax[:3]).normalized * dst
-#     #     return self
-
-
 from numba_scripts.classes import Csys
 
 
@@ -588,6 +441,7 @@ class Scene:
             transmission=1.0,
             ior=1.0,
         )
+        self.frame_number = 0
 
     def validate_mesh_indices(self):
         for msh in self.meshes:
