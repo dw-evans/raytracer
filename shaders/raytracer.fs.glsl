@@ -542,16 +542,30 @@ vec3 randomDirectionHemisphere(vec3 normal, inout uint rngState)
 
 
 
+vec3 idToColor(int n) {
+    // Use large primes to scramble bits
+    uint x = uint(n);
+    x = (x ^ (x >> 16u)) * 0x45d9f3bu;
+    x = (x ^ (x >> 16u)) * 0x45d9f3bu;
+    x = (x ^ (x >> 16u));
+
+    // Split into R, G, B channels (0–255)
+    float r = float((x >>  0u) & 0xFFu) / 255.0;
+    float g = float((x >>  8u) & 0xFFu) / 255.0;
+    float b = float((x >> 16u) & 0xFFu) / 255.0;
+
+    return vec3(r, g, b);
+}
+
+
 HitInfo calculateRayCollision(Ray ray, inout uint rngState) {
     // calculates the ray collisions for all 
     HitInfo closestHit = defaultHitInfo();
 
-
     bool doHitBackside;
 
     // loop over all spheres in the scene
-    for (int i = 0; i < spheresCount; i++)
-    {
+    for (int i = 0; i < spheresCount; i++) {
         Sphere sphere = spheres[i];
         HitInfo hitInfo = raySphere(
             ray,
@@ -559,23 +573,19 @@ HitInfo calculateRayCollision(Ray ray, inout uint rngState) {
             sphere.radius
         );
 
-        if (hitInfo.dst < 1e-6) 
-        {
+        if (hitInfo.dst < 1e-6) {
             continue;
         }
 
-        if ((hitInfo.didHit) && (hitInfo.dst < closestHit.dst))
-        {
+        if ((hitInfo.didHit) && (hitInfo.dst < closestHit.dst)) {
             closestHit = hitInfo;
             closestHit.material = sphere.material;
         }
     }
 
     // loop over all of the meshesand their BVHs
-    for (int j = 0; j < meshCount; j++)
-    {
+    for (int j = 0; j < meshCount; j++) {
         
-
         GraphNode graphNodeStack[16]; // stack of node ids to check
 
         Mesh mesh = meshes[j];
@@ -598,65 +608,62 @@ HitInfo calculateRayCollision(Ray ray, inout uint rngState) {
                 GraphNode child1 = getNodeFromNodeId(node.childId1);
                 graphNodeStack[stackIndex++] = child1;
                 continue;
+            }
             if (node.childId2 >= 0) {
                 GraphNode child2 = getNodeFromNodeId(node.childId2);
                 graphNodeStack[stackIndex++] = child2;
                 continue;
             } 
-            else {
-                bool check = boundingBoxIntersect(ray, node.aabbMin, node.aabbMax);
-                if (check) {
+            bool check = boundingBoxIntersect(ray, node.aabbMin, node.aabbMax);
+            if (check) {
+                // closestHit.debugInfo.x = 1.0 ; closestHit.didHit = true;
+                // return closestHit;
+                Triangle[MAX_TRIS_REQUESTED] nodeTriangles = getTrianglesFromNode(node);
+                for (int i = 0; i < node.childObjCount; i++) {
 
-                    
-                    // closestHit.debugInfo.x = 1.0 ; closestHit.didHit = true;
-                    // return closestHit;
-                    Triangle[MAX_TRIS_REQUESTED] nodeTriangles = getTrianglesFromNode(node);
-                    for (int i = 0; i < node.childObjCount; i++) {
+                    Triangle tri = nodeTriangles[i];
 
+                    // hitInfo.debugInfo.x = len / 10.0;
 
-
-                        Triangle tri = nodeTriangles[i];
-
-                        // hitInfo.debugInfo.x = len / 10.0;
-
-                        // the ray cannot reflect off the same one it reflected off!
-                        if (tri.triId == ray.prevHit.facetId) {
-                            continue;
-                        }
-
-                        // if the ray is in a solid (refraction, force enable backside reflection for facets of the same mesh.)
-                        if (ray.inSolid) {
-                            // if allow the object to hit the backside of its own mesh if it came off the same 
-                            if (ray.prevHit.meshIndex == tri.meshIndex) {
-                                doHitBackside = true;
-                            }
-                        } 
-                        // otherwise allow hitting the back side of a surface if specified in material 
-                        // (edge case of a back side surface within a transparent material)
-                        else {
-                            doHitBackside = !meshes[tri.meshIndex].material.transparentFromBehind;
-                        }
-
-                        // calculate the rayTriangle intersection 
-                        HitInfo triHitInfo = rayTriangle(ray, tri, doHitBackside);
-                        // HitInfo triHitInfo = rayTriangle(ray, tri, true);
-
-
-                        // skip if the distance is too low
-                        if (triHitInfo.dst < 1e-6) {
-                            continue;
-                        }
-
-                        // if (!(triHitInfo.didHit)) {
-                        //     closestHit.debugInfo.x = 1.0 ; closestHit.didHit = true;
-                        //     return closestHit;
-                        // }
-
-                        if ((triHitInfo.didHit) && (triHitInfo.dst < closestHit.dst)) {
-                            closestHit = triHitInfo;
-                            closestHit.material = meshes[tri.meshIndex].material;
-                        }
+                    // the ray cannot reflect off the same one it reflected off!
+                    if (tri.triId == ray.prevHit.facetId) {
+                        continue;
                     }
+
+                    // if the ray is in a solid (refraction, force enable backside reflection for facets of the same mesh.)
+                    if (ray.inSolid) {
+                        // if allow the object to hit the backside of its own mesh if it came off the same 
+                        if (ray.prevHit.meshIndex == tri.meshIndex) {
+                            doHitBackside = true;
+                        }
+                    } 
+                    // otherwise allow hitting the back side of a surface if specified in material 
+                    // (edge case of a back side surface within a transparent material)
+                    else {
+                        doHitBackside = !meshes[tri.meshIndex].material.transparentFromBehind;
+                    }
+
+                    // calculate the rayTriangle intersection 
+                    HitInfo triHitInfo = rayTriangle(ray, tri, doHitBackside);
+                    // HitInfo triHitInfo = rayTriangle(ray, tri, true);
+
+
+                    // skip if the distance is too low
+                    if (triHitInfo.dst < 1e-6) {
+                        continue;
+                    }
+
+
+                    if ((triHitInfo.didHit) && (triHitInfo.dst < closestHit.dst)) {
+                        closestHit = triHitInfo;
+                        closestHit.material = meshes[tri.meshIndex].material;
+                        // closestHit.debugInfo = idToColor(node.id) ; closestHit.didHit = true;
+                    }
+                    // if (!(triHitInfo.didHit)){
+                    //     closestHit.debugInfo = idToColor(node.id) ; closestHit.didHit = true;
+                    //     // closestHit.debugInfo = vec3(1.0, 1.0, 1.0) ; closestHit.didHit = true;
+                    //     return closestHit;
+                    // }
                 }
             }
         }
@@ -1019,7 +1026,7 @@ void main()
         totalIncomingLight += traceRay(newRay, rngState);
         // totalIncomingLight += traceRay(ray, rngState);
 
-        float weight = 0.0;
+        float weight = 0.5;
         if (i == (RAYS_PER_PIXEL - 1))
         {
             // totalIncomingLight = totalIncomingLight * (1-weight) + weight * newRay.dir;

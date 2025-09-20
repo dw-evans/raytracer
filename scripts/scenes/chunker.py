@@ -229,7 +229,7 @@ class BVHParentNode:
         pass
 
     def is_leaf(self):
-        return self.child_left is None
+        return self.child_left is None and self.child_right is None
 
     def _update_tri_ids(self):
         self.tri_ids = np.array([t.triangle_id for t in self.tris], dtype=np.int32)
@@ -283,10 +283,13 @@ class BVHParentNode:
             else:
                 tris_right.append(j)
 
+
         if tris_left:
             self.child_left = BVHParentNode(graph=self.graph, tris=[self.tris[x] for x in tris_left], depth=self.depth + 1)
         if tris_right:
             self.child_right = BVHParentNode(graph=self.graph, tris=[self.tris[x] for x in tris_right], depth=self.depth + 1)
+
+        pass
 
 
     def tobytes(self):

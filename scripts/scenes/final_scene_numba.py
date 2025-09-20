@@ -124,18 +124,19 @@ material_red_1 = Material(
 csys0 = numba_scripts.classes.Csys()
 
 load_data = [
-    ("objects/old/final_scene/wall_left.obj", material_red, csys0),
-    ("objects/old/final_scene/wall_right.obj", material_green, csys0),
-    ("objects/old/final_scene/wall_top.obj", material_white_upper, csys0),
-    ("objects/old/final_scene/wall_bottom.obj", material_white_lower, csys0),
-    ("objects/old/final_scene/wall_front.obj", material_front_wall_animated, csys0),
-    ("objects/old/final_scene/wall_back.obj", material_rear_wall_animated, csys0),
-    ("objects/old/final_scene/light.obj", material_light_source_1, csys0),
+    # ("objects/old/final_scene/wall_left.obj", material_red, csys0),
+    # ("objects/old/final_scene/wall_right.obj", material_green, csys0),
+    # ("objects/old/final_scene/wall_top.obj", material_white_upper, csys0),
+    # ("objects/old/final_scene/wall_bottom.obj", material_white_lower, csys0),
+    # (r"objects\monkey.blend\wall_bottom.obj", material_white_lower, csys0),
+    # ("objects/old/final_scene/wall_front.obj", material_front_wall_animated, csys0),
+    # ("objects/old/final_scene/wall_back.obj", material_rear_wall_animated, csys0),
+    # ("objects/old/final_scene/light.obj", material_light_source_1, csys0),
     # ("objects/old/final_scene/subject.obj", material_subject),
     # (monkey_file:="objects/monkey.obj", material_red_1, numba_scripts.classes.Csys()),
     (monkey_file:="objects/monkey.obj", material_red_1, Csys()),
 ]
-
+# monkey_file="objects/monkey.obj"
 
 
 # car_csys._pos = np.array([0.0, 1.0, 8.0], dtype=np.float32)
@@ -383,7 +384,7 @@ from functools import partial
 scene.animations.append(FrameAnimation(scene, get_frame_number))
 
 scene.animations.append(FrameAnimation(scene.cam, animate_camera))
-scene.animations.append(FrameAnimation(monkey_mesh, animate_monkey))
+# scene.animations.append(FrameAnimation(monkey_mesh, animate_monkey))
 scene.animations.append(FrameAnimation(material_rear_wall_animated, animate_rear_material))
 scene.animations.append(FrameAnimation(material_front_wall_animated, animate_front_material))
 scene.animations.append(FrameAnimation(material_red, partial(animate_internal_materials_specular_partial, edge0=20, edge1=45, mat0=copy.deepcopy(material_red))))
@@ -396,7 +397,7 @@ scene.animations.append(FrameAnimation(scene.cam, animate_camera_params))
 
 
 animate_camera(scene.cam, 0)
-animate_monkey(monkey_mesh, 0)
+# animate_monkey(monkey_mesh, 0)
 animate_rear_material(material_rear_wall_animated, 0)
 animate_front_material(material_front_wall_animated, 0)
 animate_front_material(scene.cam, 0)
@@ -408,7 +409,8 @@ from .chunker import chunk_mesh_bvh, BVHParentNode, BVHGraph
 BVHGraph.reset()
 
 # chunk_mesh_bvh(monkey_mesh)
-chunk_mesh_bvh(scene.meshes[3])
+# chunk_mesh_bvh(scene.meshes[3])
+chunk_mesh_bvh(scene.meshes[0])
 # chunk_mesh_bvh(scene.meshes[-5])
 
 BVHGraph.register_all()
