@@ -172,15 +172,11 @@ const int MAX_TRIS_REQUESTED = 100;
 Triangle[MAX_TRIS_REQUESTED] getTrianglesFromNode(GraphNode obj) {
     // returns an array of triangles from the start offset and length params in the 
     // graph node data structure
-    int start_offset = obj.childObjOffset;
-    int arr_length = obj.childObjCount;
-
     Triangle[MAX_TRIS_REQUESTED] ret;
 
-    for (int i = 0; i < arr_length; i++) {
-        ret[i] = getTriangleFromId(childObjIds[start_offset + i]);
+    for (int i = 0; i < obj.childObjCount; i++) {
+        ret[i] = getTriangleFromId(childObjIds[obj.childObjOffset + i]);
     }
-
     return ret;
 }
 
@@ -584,6 +580,7 @@ HitInfo calculateRayCollision(Ray ray, inout uint rngState) {
     }
 
     // loop over all of the meshesand their BVHs
+    int bbox_check_count = 0;
     for (int j = 0; j < meshCount; j++) {
         
         GraphNode graphNodeStack[16]; // stack of node ids to check
@@ -597,31 +594,54 @@ HitInfo calculateRayCollision(Ray ray, inout uint rngState) {
         graphNodeStack[0] = g;
 
         int stackIndex = 1;
-        // int max_checks = 10;
         // int checks = 0;
-        // while ((stackIndex > 0) && (checks < max_checks))  {
-        for (int j = 0; j < 8; j++) {
+        // int max_checks = 10;
+
+        while (stackIndex > 0)  {
+
+        // for (int j = 0; j < 5; j++) {
 
             GraphNode node = graphNodeStack[--stackIndex];
 
-            if (node.childId1 >= 0) {
+            bool isvalid1 = (node.childId1 >= 0);
+            bool isvalid2 = (node.childId2 >= 0);
+
+            // check for collision against child 1, add it to the stack if it hits
+            if (isvalid1) {
                 GraphNode child1 = getNodeFromNodeId(node.childId1);
-                graphNodeStack[stackIndex++] = child1;
+                bool check1 = boundingBoxIntersect(ray, child1.aabbMin, child1.aabbMax);
+                if (check1) {
+                    graphNodeStack[stackIndex++] = child1;
+                }
+            }
+            // check for collision against child 2, add it to the stack if it hits
+            if (isvalid2) {
+                GraphNode child2 = getNodeFromNodeId(node.childId2);
+                bool check2 = boundingBoxIntersect(ray, child2.aabbMin, child2.aabbMax);
+                if (check2) {
+                    graphNodeStack[stackIndex++] = child2;
+                }
+            } 
+            // if either child was valid, we can skip the comparison
+            if (isvalid1 || isvalid2) {
                 continue;
             }
-            if (node.childId2 >= 0) {
-                GraphNode child2 = getNodeFromNodeId(node.childId2);
-                graphNodeStack[stackIndex++] = child2;
-                continue;
-            } 
+
+            bbox_check_count += 1;
             bool check = boundingBoxIntersect(ray, node.aabbMin, node.aabbMax);
             if (check) {
+
+                // closestHit.debugInfo = idToColor(node.id) ; closestHit.didHit = true;
+                // return closestHit;
+
                 // closestHit.debugInfo.x = 1.0 ; closestHit.didHit = true;
                 // return closestHit;
                 Triangle[MAX_TRIS_REQUESTED] nodeTriangles = getTrianglesFromNode(node);
+                
                 for (int i = 0; i < node.childObjCount; i++) {
 
                     Triangle tri = nodeTriangles[i];
+                    // Triangle tri = triangles[i];
 
                     // hitInfo.debugInfo.x = len / 10.0;
 
@@ -653,20 +673,18 @@ HitInfo calculateRayCollision(Ray ray, inout uint rngState) {
                         continue;
                     }
 
-
                     if ((triHitInfo.didHit) && (triHitInfo.dst < closestHit.dst)) {
                         closestHit = triHitInfo;
                         closestHit.material = meshes[tri.meshIndex].material;
-                        // closestHit.debugInfo = idToColor(node.id) ; closestHit.didHit = true;
                     }
-                    // if (!(triHitInfo.didHit)){
-                    //     closestHit.debugInfo = idToColor(node.id) ; closestHit.didHit = true;
-                    //     // closestHit.debugInfo = vec3(1.0, 1.0, 1.0) ; closestHit.didHit = true;
-                    //     return closestHit;
-                    // }
                 }
             }
         }
+    }
+    int threshold = 100;
+    closestHit.debugInfo = vec3(1.0, 1.0, 1.0) * bbox_check_count / float(threshold);
+    if (bbox_check_count > threshold) {
+        closestHit.debugInfo = vec3(1.0, 0.0, 1.0);
     }
     return closestHit;
 }
@@ -1026,7 +1044,7 @@ void main()
         totalIncomingLight += traceRay(newRay, rngState);
         // totalIncomingLight += traceRay(ray, rngState);
 
-        float weight = 0.5;
+        float weight = 0.99;
         if (i == (RAYS_PER_PIXEL - 1))
         {
             // totalIncomingLight = totalIncomingLight * (1-weight) + weight * newRay.dir;

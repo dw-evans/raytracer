@@ -116,6 +116,13 @@ class Sphere(ByteableObject):
 
 class Triangle(ByteableObject):
     TRIANGLE_ID = 0
+    # TRIANGLES = []
+
+    # @staticmethod
+    # def register(tri:Triangle):
+    #     tri.triangle_id = Triangle.TRIANGLE_ID
+    #     Triangle.TRIANGLES.append(tri)
+    #     Triangle.TRIANGLE_ID += 1
 
     def __init__(
         self,
@@ -128,6 +135,7 @@ class Triangle(ByteableObject):
         normalC: Vector3 = None,
         parent: Mesh = None,
     ) -> None:
+
 
         self.posA = posA
         self.posB = posB
@@ -151,11 +159,9 @@ class Triangle(ByteableObject):
 
         self.__post_init__()
 
-        self.triangle_id = Triangle.TRIANGLE_ID
+        self.triangle_id:int = None
 
-        Triangle.TRIANGLE_ID += 1
-
-        pass
+        # Triangle.register(self)
 
     def __post_init__(self) -> None:
         # Correct the normals based on the values provided
@@ -451,6 +457,17 @@ class Scene:
         )
         self.frame_number = 0
         # self.bvh_graphs:list[BVHGraph] = None
+        self.triangles:list[Triangle] = None
+
+    def reset_and_register_triangles(self):
+        # Register all of the triangles within each mesh
+        # to create the array of triangles. 
+        self.triangles = []
+        for m in self.meshes:
+            for t in m.triangles:
+                t.triangle_id = len(self.triangles)
+                self.triangles.append(t)
+
 
     @property
     def bvh_graphs(self) -> list[BVHGraph]:
@@ -476,12 +493,12 @@ class Scene:
             count += len(mesh.triangles)
         return count
 
-    @property
-    def triangles(self) -> list[Triangle]:
-        ret = []
-        for m in self.meshes:
-            ret += m.triangles
-        return ret
+    # @property
+    # def triangles(self) -> list[Triangle]:
+    #     ret = []
+    #     for m in self.meshes:
+    #         ret += m.triangles
+    #     return ret
 
     def select_object(self, obj):
         self.selected_objects.append(obj)

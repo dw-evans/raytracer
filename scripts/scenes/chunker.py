@@ -149,19 +149,128 @@ def chunk_mesh_bvh(mesh:"Mesh"):
     node0 = BVHParentNode(graph=g, tris=mesh.triangles, depth=0)
     node0.split_recursively(max_depth=4)
     mesh.bvh_graph = g
+    plot_aabbs([x.aabb for x in g.nodes])
     pass
+
+import matplotlib
+
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d.art3d import Line3DCollection
+import numpy as np
+import cycler
+colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+my_cycler = cycler.cycler(color=colors)
+import itertools
+# Apply it globally
+
+
+def plot_aabbs(aabbs):
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+    lines = []
+    for bbmin, bbmax in aabbs:
+        # Get corners of the box
+        x0, y0, z0 = bbmin
+        x1, y1, z1 = bbmax
+        corners = np.array([
+            [x0, y0, z0],
+            [x1, y0, z0],
+            [x1, y1, z0],
+            [x0, y1, z0],
+            [x0, y0, z1],
+            [x1, y0, z1],
+            [x1, y1, z1],
+            [x0, y1, z1],
+        ])
+
+        # Define edges as pairs of corner indices
+        edges = [
+            [0, 1], [1, 2], [2, 3], [3, 0],  # bottom face
+            [4, 5], [5, 6], [6, 7], [7, 4],  # top face
+            [0, 4], [1, 5], [2, 6], [3, 7]   # vertical edges
+        ]
+
+        for e in edges:
+            lines.append([corners[e[0]], corners[e[1]]])
+
+    # Add all edges at once
+    c = itertools.cycle(my_cycler)
+
+    # lc = Line3DCollection(lines, colors=c, linewidths=1)
+    lc = Line3DCollection(lines, colors="blue", linewidths=1)
+    ax.add_collection3d(lc)
+
+    # Auto scale axes
+    all_points = np.array([p for line in lines for p in line])
+    ax.auto_scale_xyz(all_points[:,0], all_points[:,1], all_points[:,2])
+
+    # plt.ion()  # interactive mode ON
+    plt.show()
+    pass
+
+
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+import numpy as np
+
+def plot_aabbs_filled(aabbs, face_color="cyan", edge_color="k", alpha=0.3):
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+
+    for bbmin, bbmax in aabbs:
+        x0, y0, z0 = bbmin
+        x1, y1, z1 = bbmax
+        corners = np.array([
+            [x0, y0, z0],
+            [x1, y0, z0],
+            [x1, y1, z0],
+            [x0, y1, z0],
+            [x0, y0, z1],
+            [x1, y0, z1],
+            [x1, y1, z1],
+            [x0, y1, z1],
+        ])
+
+        # Define the 6 cube faces
+        faces = [
+            [corners[j] for j in [0,1,2,3]],  # bottom
+            [corners[j] for j in [4,5,6,7]],  # top
+            [corners[j] for j in [0,1,5,4]],  # front
+            [corners[j] for j in [2,3,7,6]],  # back
+            [corners[j] for j in [1,2,6,5]],  # right
+            [corners[j] for j in [0,3,7,4]],  # left
+        ]
+
+        ax.add_collection3d(
+            Poly3DCollection(faces, 
+                             facecolors=face_color, 
+                             edgecolors=edge_color, 
+                             linewidths=1, 
+                             alpha=alpha)
+        )
+
+    # Auto scale axes to fit all boxes
+    all_points = np.array([c for bb in aabbs for c in [bb[0], bb[1]]])
+    ax.auto_scale_xyz(all_points[:,0], all_points[:,1], all_points[:,2])
+
+    plt.show()
+
+
+
+
+
 
 class BVHGraph(object):
     ID_COUNTER = 0
     BVH_TRI_ID_LIST_GLOBAL = []
-    graphs:list[BVHGraph] = []
+    GRAPHS:list[BVHGraph] = []
     
     def __init__(self, mesh:"Mesh"):
-        BVHGraph.graphs.append(self)
+        BVHGraph.GRAPHS.append(self)
         self.id = BVHGraph.ID_COUNTER
         BVHGraph.ID_COUNTER += 1
         self.mesh = mesh
-        self.node_id = 0
+        self.node_id_counter = 0
         self.nodes:list[BVHParentNode] = []
         self.tri_id_list:list[int] = []
         self.leaf_nodes:list = None
@@ -171,24 +280,27 @@ class BVHGraph(object):
         BVHGraph.BVH_TRI_ID_LIST_GLOBAL += tri_ids
         return start_offset
     
-    def register_leaf_nodes(self):
+    def update_leaf_tris_and_register(self):
         self.leaf_nodes = []
         for node in self.nodes:
             if node.is_leaf():
+                node._update_tri_ids()
                 node.tris_start_offset = len(BVHGraph.BVH_TRI_ID_LIST_GLOBAL)
                 BVHGraph.BVH_TRI_ID_LIST_GLOBAL += node.tri_ids.tolist()
                 self.leaf_nodes.append(node)
                 pass
+        pass
 
     @staticmethod
     def register_all():
-        for g in BVHGraph.graphs:
-            g.register_leaf_nodes()
+        for g in BVHGraph.GRAPHS:
+            g.update_leaf_tris_and_register()
 
     @classmethod
     def reset(cls):
         cls.ID_COUNTER = 0
         cls.BVH_TRI_ID_LIST_GLOBAL = []
+        cls.GRAPHS = []
 
 
 aabb_0 = pyrr.aabb.create_from_points(np.array([0.0, 0.0, 0.0]))
@@ -196,8 +308,8 @@ class BVHParentNode:
 
     def __init__(self, graph:BVHGraph, tris, depth):
         self.graph = graph
-        self.node_id = self.graph.node_id
-        self.graph.node_id += 1
+        self.node_id = self.graph.node_id_counter
+        self.graph.node_id_counter += 1
         
         self.depth = depth
 
@@ -236,11 +348,17 @@ class BVHParentNode:
 
     def split_recursively(self, max_depth):
         # if there are no triangles to split, don't split...
-        if len(self.tris) <= 1:
+        if len(self.tris) <= 5:
             return
         if self.depth == max_depth:
             return
+        print(f"self.tris.__len__(): {self.tris.__len__()}")
         self.split()
+        if self.child_left is not None:
+            print(f"self.child_left.tris.__len__(): {self.child_left.tris.__len__()}")
+        if self.child_right is not None:
+            print(f"self.child_right.tris.__len__(): {self.child_right.tris.__len__()}")
+
         if self.child_left is not None:
             self.child_left.split_recursively(max_depth=max_depth)
         if self.child_right is not None:
@@ -254,7 +372,7 @@ class BVHParentNode:
         if not self.tris:
             self.centroids = np.array([[]])
             return
-        self.centroids = np.mean(self.vertices, axis=2)
+        self.centroids = np.mean(self.vertices, axis=1)
 
     def _update_aabb(self):
         if not self.tris:
@@ -265,9 +383,6 @@ class BVHParentNode:
     def split(self):
         vertices = self.vertices
         aabb = self.aabb
-
-        if not vertices.size:
-            return
 
         longest_axis = np.argmax(abs(aabb[0]-aabb[1]))
 
@@ -283,6 +398,14 @@ class BVHParentNode:
             else:
                 tris_right.append(j)
 
+        # tl = [self.tris[x] for x in tris_left]
+        # tr = [self.tris[x] for x in tris_right]
+
+        # vl = np.array([x.positions for x in tl])
+        # vr = np.array([x.positions for x in tr])
+
+        # aabbl = pyrr.aabb.create_from_points(vl.reshape(-1, 3))
+        # aabbr = pyrr.aabb.create_from_points(vr.reshape(-1, 3))
 
         if tris_left:
             self.child_left = BVHParentNode(graph=self.graph, tris=[self.tris[x] for x in tris_left], depth=self.depth + 1)

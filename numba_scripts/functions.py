@@ -17,7 +17,7 @@ def timer(fn: Callable):
         t_start = time.time()
         ret = fn(*args, **kwargs)
         t_end = time.time()
-        print(f"Function {fn.__name__} executed in {(t_end - t_start) * 1e3} ms")
+        print(f"Function {fn.__name__} executed in {(t_end - t_start) * 1e3:.2f} ms")
         return ret
 
     return wrapper

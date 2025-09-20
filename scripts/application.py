@@ -263,7 +263,10 @@ class Application:
             self.watchdog.start()
             self.watchdog_is_running = True
 
+        print("Reconfiguring display program...")
         self.display_program.configure_program(self.display_scene)
+        print("Display program reconfigured...")
+
         self.is_requesting_exit.clear()
 
         while self.running:
@@ -345,14 +348,14 @@ class Application:
         if self.is_animating:
             print(self.animation_clock)
             self.display_scene.animate(time=self.animation_clock)
-            self.display_program.configure_program(self.display_scene)
+            # self.display_program.configure_program(self.display_scene)
 
             self.animation_clock = self.animation_clock + self.dt
     def animate_frame(self, i):
         if self.is_animating:
             print(f"Frame Number Animation = {i}")
             self.display_scene.animate_frame(frame=i)
-            self.display_program.configure_program(self.display_scene)
+            # self.display_program.configure_program(self.display_scene)
 
 
     class ShaderHandler(FileSystemEventHandler):
@@ -383,9 +386,9 @@ class Application:
                 
                     self.app.display_scene = SCENE.scene
                     print("Scene reloaded")
-                    print("Reconfiguring program...")
-                    self.app.display_program.configure_program(scene=self.app.display_scene)
-                    print("Program reconfigured...")
+                    # print("Reconfiguring program...")
+                    # self.app.display_program.configure_program(scene=self.app.display_scene)
+                    # print("Program reconfigured...")
                     print("Re-running application loop.")
                     self.app.run()
                 
@@ -881,39 +884,30 @@ class RayTracerDynamic(ProgramABC):
         program["meshCount"].write(struct.pack("i", len(scene.meshes)))
 
         print(f"Updating Triangle Positions...")
-        # numba_scripts.classes.update_triangles_to_csys(triangles, scene.meshes[0].csys)
-        # timer(numba_scripts.classes.update_triangles_to_csys)(
-        #     triangles, scene.meshes[0].csys
-        # )
-
-        for mesh in scene.meshes:
-            numba_scripts.classes.update_triangles_to_csys(mesh.triangles, mesh.csys)
-
+        def update_triangle_positions():
+            for mesh in scene.meshes:
+                numba_scripts.classes.update_triangles_to_csys(mesh.triangles, mesh.csys)
+        timer(update_triangle_positions)()
 
         print(f"Loading triangles into SSBO...")
-
-        # triangle_data = numba_scripts.classes.triangles_to_array(triangles)
         triangle_data = timer(numba_scripts.classes.triangles_to_array)(triangles)
-        # triangle_data = numba_scripts.classes.many_triangles_to_bytes(triangles)
         triangle_bytes = triangle_data.tobytes()
-
-        print(f"Loading triangles complete.")
-
         self.triangles_ssbo = context.buffer(triangle_bytes)
         triangles_ssbo_binding = 9
         self.triangles_ssbo.bind_to_storage_buffer(binding=triangles_ssbo_binding)
+        print(f"Loading triangles complete.")
 
+        print(f"Loading meshes into SSBO...")
         mesh_buffer = context.buffer(functions.iter_to_bytes(scene.meshes))
         mesh_buffer_binding = 10
         program["meshBuffer"].binding = mesh_buffer_binding
         mesh_buffer.bind_to_uniform_block(mesh_buffer_binding)
+        print(f"Loading meshes complete.")
 
         # sky_color = Vector3((131, 200, 228), dtype="f4") / 255
         # program["skyColor"].write(struct.pack("3f", *sky_color))
 
-        material_buffer = context.buffer(
-            self.app.display_scene.atmosphere_material.tobytes()
-        )
+        material_buffer = context.buffer(self.app.display_scene.atmosphere_material.tobytes())
         material_buffer_binding = 11
         program["materialBuffer"].binding = material_buffer_binding
         material_buffer.bind_to_uniform_block(material_buffer_binding)
@@ -921,14 +915,17 @@ class RayTracerDynamic(ProgramABC):
         from .scenes.chunker import BVHGraph
         import itertools
 
-        mesh_bvh_graph_bytes = functions.iter_to_bytes(itertools.chain.from_iterable([x.nodes for x in scene.bvh_graphs]))
+        print(f"Loading bvh graph data into SSBO...")
+        mesh_bvh_graph_bytes = functions.iter_to_bytes(list(itertools.chain.from_iterable([x.nodes for x in scene.bvh_graphs])))
         self.mesh_bvh_graph_ssbo = context.buffer(mesh_bvh_graph_bytes)
         self.mesh_bvh_graph_ssbo.bind_to_storage_buffer(binding=12)
+        print(f"Loading bvh graph data complete.")
 
+        print(f"Loading bvh_tri_id list into SSBO...")
         node_triangle_id_arr_bytes = np.array(BVHGraph.BVH_TRI_ID_LIST_GLOBAL, dtype=np.int32).tobytes()
         self.bvh_tri_ids_buffer = context.buffer(node_triangle_id_arr_bytes)
         self.bvh_tri_ids_buffer.bind_to_storage_buffer(binding=13)
-
+        print(f"Loading bvh_tri_id list complete.")
 
         pass
 

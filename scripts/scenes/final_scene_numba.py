@@ -123,20 +123,20 @@ material_red_1 = Material(
 
 csys0 = numba_scripts.classes.Csys()
 
+monkey_file="objects/monkey.obj"
 load_data = [
     # ("objects/old/final_scene/wall_left.obj", material_red, csys0),
     # ("objects/old/final_scene/wall_right.obj", material_green, csys0),
     # ("objects/old/final_scene/wall_top.obj", material_white_upper, csys0),
-    # ("objects/old/final_scene/wall_bottom.obj", material_white_lower, csys0),
+    ("objects/old/final_scene/wall_bottom.obj", material_white_lower, csys0),
     # (r"objects\monkey.blend\wall_bottom.obj", material_white_lower, csys0),
     # ("objects/old/final_scene/wall_front.obj", material_front_wall_animated, csys0),
     # ("objects/old/final_scene/wall_back.obj", material_rear_wall_animated, csys0),
     # ("objects/old/final_scene/light.obj", material_light_source_1, csys0),
     # ("objects/old/final_scene/subject.obj", material_subject),
     # (monkey_file:="objects/monkey.obj", material_red_1, numba_scripts.classes.Csys()),
-    (monkey_file:="objects/monkey.obj", material_red_1, Csys()),
+    (monkey_file:=monkey_file, material_red_1, Csys()),
 ]
-# monkey_file="objects/monkey.obj"
 
 
 # car_csys._pos = np.array([0.0, 1.0, 8.0], dtype=np.float32)
@@ -356,11 +356,13 @@ def animate_camera_params(obj:Camera, i:int):
     obj.antialias_strength = 0.001
     # obj.near_plane = 8.5
     obj.near_plane = Vector3(monkey_mesh.csys.pos - obj.csys.pos).squared_length ** 0.5
-    obj.bounces_per_ray = 2
+    obj.bounces_per_ray = 1
     obj.rays_per_pixel = 1
-    obj.passes_per_frame = 10
-    obj.chunksx = 4
-    obj.chunksy = 4
+    obj.passes_per_frame = 100
+    obj.chunksx = 5
+    obj.chunksy = 5
+
+    obj.csys.pos = (2* monkey_mesh.csys.pos + obj.csys.pos) /3.0
     
     # add chunking
     # def check():
@@ -394,7 +396,7 @@ scene.animations.append(FrameAnimation(material_white_lower, partial(animate_int
 scene.animations.append(FrameAnimation(scene.cam, animate_camera_params))
 
 
-
+# monkey_mesh = scene.meshes[0]
 
 animate_camera(scene.cam, 0)
 # animate_monkey(monkey_mesh, 0)
@@ -404,15 +406,28 @@ animate_front_material(scene.cam, 0)
 
 
 
-from .chunker import chunk_mesh_bvh, BVHParentNode, BVHGraph
 
-BVHGraph.reset()
+from . import chunker 
+from numba_scripts.functions import timer
+
+import importlib
+importlib.reload(chunker)
+
 
 # chunk_mesh_bvh(monkey_mesh)
 # chunk_mesh_bvh(scene.meshes[3])
-chunk_mesh_bvh(scene.meshes[0])
+chunker.BVHGraph.reset()
+# chunker.chunk_mesh_bvh(scene.meshes[0])
+timer(chunker.chunk_mesh_bvh)(scene.meshes[1])
 # chunk_mesh_bvh(scene.meshes[-5])
 
-BVHGraph.register_all()
+import itertools
+
+scene.reset_and_register_triangles()
+
+timer(chunker.BVHGraph.register_all)()
 
 pass
+import pandas as pd
+
+# pd.DataFrame([list(itertools.chain.from_iterable(x.aabb.tolist())) + [x.is_leaf(), len(x.tris)] for x in chunker.BVHGraph.GRAPHS[0].leaf_nodes])
