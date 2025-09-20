@@ -106,7 +106,6 @@ struct Triangle
 
 layout(std140, binding=9) buffer triBuffer
 {
-    // Triangle triangles[TRIANGLES_COUNT_MAX];
     Triangle triangles[];
 };
 
@@ -119,9 +118,77 @@ Triangle getTriangle(int index)
 }
 
 
+Triangle getTriangleFromId(int triId) {
+    for (int i = 0; i < triCount; i++) {
+        Triangle tri = triangles[i];  // fixed typo
+        if (tri.triId == triId) {
+            return tri;
+        }
+    }
+    // Return a default/empty triangle if not found
+    Triangle emptyTri;
+    emptyTri.triId = -1;  // mark as invalid
+    return emptyTri;
+}
+
+uniform int nodeCount;
+
+struct GraphNode {
+    vec3 aabbMin;
+    vec3 aabbMax;
+    int id;
+    int childId1;
+    int childId2;
+    int childObjOffset; // index into global childObj array
+    int childObjCount;  // number of children
+};
+
+// layout(std140, binding=9) buffer triBuffer
+layout(std140, binding=12) buffer GraphNodeBuffer {
+    GraphNode graphNodes[];
+};
+
+layout(std430, binding=13) buffer BVHTriIdsBuffer {
+    int childObjIds[]; // all child IDs concatenated
+};
+
+GraphNode getNodeFromNodeId(int nodeId) {
+    // returns a node from a node id
+    for (int i = 0; i < triCount; i++) {
+        GraphNode obj = graphNodes[i];  // fixed typo
+        if (obj.id == nodeId) {
+            return obj;
+        }
+    }
+    // Return a default/empty triangle if not found
+    GraphNode obj_null;
+    obj_null.id = -1;  // mark as invalid
+    return obj_null;
+}
+
+
+const int MAX_TRIS_REQUESTED = 100;
+
+Triangle[MAX_TRIS_REQUESTED] getTrianglesFromNode(GraphNode obj) {
+    // returns an array of triangles from the start offset and length params in the 
+    // graph node data structure
+    int start_offset = obj.childObjOffset;
+    int arr_length = obj.childObjCount;
+
+    Triangle[MAX_TRIS_REQUESTED] ret;
+
+    for (int i = 0; i < arr_length; i++) {
+        ret[i] = getTriangleFromId(childObjIds[start_offset + i]);
+    }
+
+    return ret;
+}
+
+
 struct Mesh
 {
     int index;
+    int node0Id;
     vec3 bboxMin;
     vec3 bboxMax;
     Material material;
@@ -144,6 +211,7 @@ struct HitInfo
     int meshIndex;
     int facetId;
     bool hitBackside;
+    vec3 debugInfo;
 };
 
 struct Ray 
@@ -179,6 +247,7 @@ HitInfo defaultHitInfo() {
     hitInfo.hitBackside = false;
     return hitInfo;
 }
+
 
 // calculate the hit information between a ray and a sphere
 HitInfo raySphere(Ray ray, vec3 spherePos, float sphereRadius) 
@@ -429,11 +498,54 @@ vec3 randomDirectionHemisphere(vec3 normal, inout uint rngState)
 }
 
 
+// void rayGraphNodeCollision(Ray ray, GraphNode node, inout GraphNode[1024] g_arr, inout int index, inout int collisionsLen) {
+//     bool check;
 
-HitInfo calculateRayCollision(Ray ray, inout uint rngState)
-{
+//     while g_arr[index].childId1
+//     if (node.childId1 != -1) {
+//         GraphNode child1 = getNodeFromNodeId(node.childId1);
+//         check = boundingBoxIntersect(ray, child1.bboxMin, child1.bboxMax);
+//         if check {
+//             g_arr[index] = node;
+//         }
+//     }
+//     else {
+//         GraphNode child2 = getNodeFromNodeId(node.childId2);
+//         check = boundingBoxIntersect(ray, node.bboxMin, node.bboxMax);
+//         if check {
+//             return child2;
+//         }
+//     }
+
+
+
+//     // bool check;
+//     // if (node.childId1 != -1) {
+//     //     GraphNode child1 = getNodeFromNodeId(node.childId1);
+//     //     check = boundingBoxIntersect(ray, child1.bboxMin, child1.bboxMax);
+//     //     if check {
+//     //         return child1;
+//     //     }
+//     // }
+//     // else {
+//     //     GraphNode child2 = getNodeFromNodeId(node.childId2);
+//     //     check = boundingBoxIntersect(ray, node.bboxMin, node.bboxMax);
+//     //     if check {
+//     //         return child2;
+//     //     }
+//     // }
+//     // // if we miss both, return a null one 
+//     // GraphNode ret_null;
+//     // ret_null.id = -1;
+//     // return ret_null;
+// }
+
+
+
+HitInfo calculateRayCollision(Ray ray, inout uint rngState) {
     // calculates the ray collisions for all 
     HitInfo closestHit = defaultHitInfo();
+
 
     bool doHitBackside;
 
@@ -458,74 +570,97 @@ HitInfo calculateRayCollision(Ray ray, inout uint rngState)
             closestHit.material = sphere.material;
         }
     }
-    // loop over all triangles in the scene
 
-    bool meshIntersectArray[MESHES_COUNT_MAX];
-
-    // determine which mesh indices are good
+    // loop over all of the meshesand their BVHs
     for (int j = 0; j < meshCount; j++)
     {
-        // check if the ray intersects the bounding box
+        
+
+        GraphNode graphNodeStack[16]; // stack of node ids to check
+
         Mesh mesh = meshes[j];
-        bool intersectsBbox = boundingBoxIntersect(ray, mesh.bboxMin, mesh.bboxMax);
-        meshIntersectArray[j] = intersectsBbox;
-    }
 
-    for (int i = 0; i < triCount; i++)
-    {
-        Triangle tri = getTriangle(i);
+        int node0Id = mesh.node0Id;
 
-        // int triMeshIndex = tri.meshIndex;
+        GraphNode g = getNodeFromNodeId(mesh.node0Id);
 
-        // the ray cannot reflect off the same one it reflected off!
-        if (tri.triId == ray.prevHit.facetId)
-        {
-            continue;
-        }
+        graphNodeStack[0] = g;
 
-        // if the ray isn't intersecting the bounding box of the triangle's mesh
-        // we will not perform the calculation
-        for (int j = 0; j < meshCount; j++)
-        {
-            if (!meshIntersectArray[j])
-            {
-                break;
+        int stackIndex = 1;
+        // int max_checks = 10;
+        // int checks = 0;
+        // while ((stackIndex > 0) && (checks < max_checks))  {
+        for (int j = 0; j < 8; j++) {
+
+            GraphNode node = graphNodeStack[--stackIndex];
+
+            if (node.childId1 >= 0) {
+                GraphNode child1 = getNodeFromNodeId(node.childId1);
+                graphNodeStack[stackIndex++] = child1;
+                continue;
+            if (node.childId2 >= 0) {
+                GraphNode child2 = getNodeFromNodeId(node.childId2);
+                graphNodeStack[stackIndex++] = child2;
+                continue;
+            } 
+            else {
+                bool check = boundingBoxIntersect(ray, node.aabbMin, node.aabbMax);
+                if (check) {
+
+                    
+                    // closestHit.debugInfo.x = 1.0 ; closestHit.didHit = true;
+                    // return closestHit;
+                    Triangle[MAX_TRIS_REQUESTED] nodeTriangles = getTrianglesFromNode(node);
+                    for (int i = 0; i < node.childObjCount; i++) {
+
+
+
+                        Triangle tri = nodeTriangles[i];
+
+                        // hitInfo.debugInfo.x = len / 10.0;
+
+                        // the ray cannot reflect off the same one it reflected off!
+                        if (tri.triId == ray.prevHit.facetId) {
+                            continue;
+                        }
+
+                        // if the ray is in a solid (refraction, force enable backside reflection for facets of the same mesh.)
+                        if (ray.inSolid) {
+                            // if allow the object to hit the backside of its own mesh if it came off the same 
+                            if (ray.prevHit.meshIndex == tri.meshIndex) {
+                                doHitBackside = true;
+                            }
+                        } 
+                        // otherwise allow hitting the back side of a surface if specified in material 
+                        // (edge case of a back side surface within a transparent material)
+                        else {
+                            doHitBackside = !meshes[tri.meshIndex].material.transparentFromBehind;
+                        }
+
+                        // calculate the rayTriangle intersection 
+                        HitInfo triHitInfo = rayTriangle(ray, tri, doHitBackside);
+                        // HitInfo triHitInfo = rayTriangle(ray, tri, true);
+
+
+                        // skip if the distance is too low
+                        if (triHitInfo.dst < 1e-6) {
+                            continue;
+                        }
+
+                        // if (!(triHitInfo.didHit)) {
+                        //     closestHit.debugInfo.x = 1.0 ; closestHit.didHit = true;
+                        //     return closestHit;
+                        // }
+
+                        if ((triHitInfo.didHit) && (triHitInfo.dst < closestHit.dst)) {
+                            closestHit = triHitInfo;
+                            closestHit.material = meshes[tri.meshIndex].material;
+                        }
+                    }
+                }
             }
         }
-
-        // if the ray is in a solid (refraction, force enable backside reflection for facets of the same mesh.)
-        if (ray.inSolid)
-        {
-            // if allow the object to hit the backside of its own mesh if it came off the same 
-            if (ray.prevHit.meshIndex == tri.meshIndex)
-            {
-                doHitBackside = true;
-            }
-        // otherwise allow hitting the back side of a surface if specified in material (edge case of a back side surface within a transparent material)
-        } else {
-            doHitBackside = !meshes[tri.meshIndex].material.transparentFromBehind;
-        }
-
-        // calculate the rayTriangle intersection 
-        HitInfo triHitInfo = rayTriangle(
-            ray,
-            tri,
-            doHitBackside
-        );
-
-        // skip if the distance is too low
-        if (triHitInfo.dst < 1e-6) 
-        {
-            continue;
-        }
-
-        if ((triHitInfo.didHit) && (triHitInfo.dst < closestHit.dst))
-        {
-            closestHit = triHitInfo;
-            closestHit.material = meshes[tri.meshIndex].material;
-        }
     }
-
     return closestHit;
 }
 
@@ -887,7 +1022,8 @@ void main()
         float weight = 0.0;
         if (i == (RAYS_PER_PIXEL - 1))
         {
-            totalIncomingLight = totalIncomingLight * (1-weight) + weight * newRay.dir;
+            // totalIncomingLight = totalIncomingLight * (1-weight) + weight * newRay.dir;
+            totalIncomingLight = totalIncomingLight * (1-weight) + weight * newRay.prevHit.debugInfo;
             // totalIncomingLight = totalIncomingLight * (1-weight) + weight * abs(newRay.prevHit.normal);
             // totalIncomingLight = totalIncomingLight * (1-weight) + weight * (-newRay.prevHits.normal);
             // totalIncomingLight = totalIncomingLight * (1-weight) + weight * abs(newRay.prevHit.dst);

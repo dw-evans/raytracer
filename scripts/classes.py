@@ -11,6 +11,10 @@ import pyrr
 import trimesh
 from .animate import Animation
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from scenes.chunker import BVHGraph
+
 
 class HitInfo:
     def __init__(self) -> None:
@@ -248,6 +252,8 @@ class Triangle(ByteableObject):
 #         self.v1 = v1
 
 
+
+
 class Mesh(ByteableObject):
     # an arbitrary counter that keeps a UID for each mesh
     MESH_INDEX = -1
@@ -259,16 +265,18 @@ class Mesh(ByteableObject):
         self.csys:Csys = Csys()
         self.mesh_index = self.MESH_INDEX
         self.material = material
+        self.bvh_graph:"BVHGraph" = None
 
 
     def tobytes(self) -> bytes | bytearray:
         bbox = self.bounding_box
         return (
             struct.pack(
-                "i12x 3f4x 3f4x",
+                "2i 8x 4f 4f",
                 self.mesh_index,
-                *bbox[0],
-                *bbox[1],
+                (self.bvh_graph.nodes[0].node_id if self.bvh_graph is not None else -1),
+                *bbox[0], 0.0,
+                *bbox[1], 0.0,
             )
             + self.material.tobytes()
         )
@@ -442,6 +450,15 @@ class Scene:
             ior=1.0,
         )
         self.frame_number = 0
+        # self.bvh_graphs:list[BVHGraph] = None
+
+    @property
+    def bvh_graphs(self) -> list[BVHGraph]:
+        ret = []
+        for mesh in self.meshes:
+            if mesh.bvh_graph is not None:
+                ret.append(mesh.bvh_graph)
+        return ret
 
     def validate_mesh_indices(self):
         for msh in self.meshes:

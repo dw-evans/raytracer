@@ -86,7 +86,7 @@ class Application:
     ) -> None:
         # window params
 
-        factor = 2
+        factor = 4
         self.DYNAMIC_RENDER_FRAMERATE = 24
 
 
@@ -346,8 +346,8 @@ class Application:
             print(self.animation_clock)
             self.display_scene.animate(time=self.animation_clock)
             self.display_program.configure_program(self.display_scene)
-            self.animation_clock = self.animation_clock + self.dt
 
+            self.animation_clock = self.animation_clock + self.dt
     def animate_frame(self, i):
         if self.is_animating:
             print(f"Frame Number Animation = {i}")
@@ -399,9 +399,9 @@ class Application:
             "shaders",
         ]
         # paths += list(Path("scripts/scenes").glob("*.py"))
-        # for path in paths:
-        #     observer.schedule(event_handler, path, recursive=False)
-        #     print(f"Started watching {path} for modifications.")
+        for path in paths:
+            observer.schedule(event_handler, path, recursive=False)
+            print(f"Started watching {path} for modifications.")
 
 
         class Ehandler(FileSystemEventHandler):
@@ -917,6 +917,20 @@ class RayTracerDynamic(ProgramABC):
         material_buffer_binding = 11
         program["materialBuffer"].binding = material_buffer_binding
         material_buffer.bind_to_uniform_block(material_buffer_binding)
+
+        from .scenes.chunker import BVHGraph
+        import itertools
+
+        mesh_bvh_graph_bytes = functions.iter_to_bytes(itertools.chain.from_iterable([x.nodes for x in scene.bvh_graphs]))
+        self.mesh_bvh_graph_ssbo = context.buffer(mesh_bvh_graph_bytes)
+        self.mesh_bvh_graph_ssbo.bind_to_storage_buffer(binding=12)
+
+        node_triangle_id_arr_bytes = np.array(BVHGraph.BVH_TRI_ID_LIST_GLOBAL, dtype=np.int32).tobytes()
+        self.bvh_tri_ids_buffer = context.buffer(node_triangle_id_arr_bytes)
+        self.bvh_tri_ids_buffer.bind_to_storage_buffer(binding=13)
+
+
+        pass
 
         # program["chunksx"].write(struct.pack("i", self.app.CHUNKSX))
         # program["chunksy"].write(struct.pack("i", self.app.CHUNKSY))

@@ -351,15 +351,15 @@ def animate_internal_materials_specular_partial(obj:Material, i:int, edge0:int, 
 def animate_camera_params(obj:Camera, i:int):
     # obj.depth_of_field_strength = 0.02
     # obj.depth_of_field_strength = 0.1
-    obj.depth_of_field_strength = 0.005
+    obj.depth_of_field_strength = 0.000
     obj.antialias_strength = 0.001
     # obj.near_plane = 8.5
     obj.near_plane = Vector3(monkey_mesh.csys.pos - obj.csys.pos).squared_length ** 0.5
-    obj.bounces_per_ray = 4
+    obj.bounces_per_ray = 2
     obj.rays_per_pixel = 1
-    obj.passes_per_frame = 20
-    obj.chunksx = 1
-    obj.chunksy = 1
+    obj.passes_per_frame = 10
+    obj.chunksx = 4
+    obj.chunksy = 4
     
     # add chunking
     # def check():
@@ -373,7 +373,7 @@ def animate_camera_params(obj:Camera, i:int):
 
 def get_frame_number(obj: Scene, i):
     i = i
-    # i = 60
+    # i = 0
     obj.frame_number = i
     return obj.frame_number
 
@@ -393,11 +393,24 @@ scene.animations.append(FrameAnimation(material_white_lower, partial(animate_int
 scene.animations.append(FrameAnimation(scene.cam, animate_camera_params))
 
 
+
+
 animate_camera(scene.cam, 0)
 animate_monkey(monkey_mesh, 0)
 animate_rear_material(material_rear_wall_animated, 0)
 animate_front_material(material_front_wall_animated, 0)
 animate_front_material(scene.cam, 0)
 
+
+
+from .chunker import chunk_mesh_bvh, BVHParentNode, BVHGraph
+
+BVHGraph.reset()
+
+# chunk_mesh_bvh(monkey_mesh)
+chunk_mesh_bvh(scene.meshes[3])
+# chunk_mesh_bvh(scene.meshes[-5])
+
+BVHGraph.register_all()
 
 pass
