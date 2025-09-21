@@ -175,7 +175,8 @@ Triangle[MAX_TRIS_REQUESTED] getTrianglesFromNode(GraphNode obj) {
     Triangle[MAX_TRIS_REQUESTED] ret;
 
     for (int i = 0; i < obj.childObjCount; i++) {
-        ret[i] = getTriangleFromId(childObjIds[obj.childObjOffset + i]);
+        // ret[i] = getTriangleFromId(childObjIds[obj.childObjOffset + i]);
+        ret[i] = triangles[childObjIds[obj.childObjOffset + i]];
     }
     return ret;
 }
@@ -1044,7 +1045,7 @@ void main()
         totalIncomingLight += traceRay(newRay, rngState);
         // totalIncomingLight += traceRay(ray, rngState);
 
-        float weight = 0.99;
+        float weight = 0.00;
         if (i == (RAYS_PER_PIXEL - 1))
         {
             // totalIncomingLight = totalIncomingLight * (1-weight) + weight * newRay.dir;

@@ -149,7 +149,7 @@ def chunk_mesh_bvh(mesh:"Mesh"):
     node0 = BVHParentNode(graph=g, tris=mesh.triangles, depth=0)
     node0.split_recursively(max_depth=4)
     mesh.bvh_graph = g
-    plot_aabbs([x.aabb for x in g.nodes])
+    # plot_aabbs([x.aabb for x in g.nodes])
     pass
 
 import matplotlib

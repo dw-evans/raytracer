@@ -356,8 +356,8 @@ def animate_camera_params(obj:Camera, i:int):
     obj.antialias_strength = 0.001
     # obj.near_plane = 8.5
     obj.near_plane = Vector3(monkey_mesh.csys.pos - obj.csys.pos).squared_length ** 0.5
-    obj.bounces_per_ray = 1
-    obj.rays_per_pixel = 1
+    obj.bounces_per_ray = 4
+    obj.rays_per_pixel = 8
     obj.passes_per_frame = 100
     obj.chunksx = 5
     obj.chunksy = 5
