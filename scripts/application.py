@@ -597,6 +597,7 @@ class DefaultShaderProgram(ProgramABC):
         program["sphereBuffer"].binding = self.sphere_buffer_binding
 
         triangles = scene.triangles
+        # triangles = numba_scripts.classes.ALL_TRIANGLES
         n_triangles = len(triangles)
         program["triCount"].write(struct.pack("i", n_triangles))
         # program["triCount"].write(struct.pack("i", 80000))
@@ -877,9 +878,10 @@ class RayTracerDynamic(ProgramABC):
             sphere_buffer = context.buffer(sphere_bytes)
             sphere_buffer.bind_to_uniform_block(self.sphere_buffer_binding)
 
-        triangles = scene.triangles
+        # triangles = scene.triangles
+        triangles = numba_scripts.classes.ALL_TRIANGLES
         n_triangles = len(triangles)
-        program["triCount"].write(struct.pack("i", n_triangles))
+        # program["triCount"].write(struct.pack("i", n_triangles))
 
         program["meshCount"].write(struct.pack("i", len(scene.meshes)))
 
@@ -912,11 +914,11 @@ class RayTracerDynamic(ProgramABC):
         program["materialBuffer"].binding = material_buffer_binding
         material_buffer.bind_to_uniform_block(material_buffer_binding)
 
-        from .scenes.chunker import BVHGraph
+        from .scenes.chunker import BVHGraph, BVHParentNode
         import itertools
 
         print(f"Loading bvh graph data into SSBO...")
-        mesh_bvh_graph_bytes = functions.iter_to_bytes(list(itertools.chain.from_iterable([x.nodes for x in scene.bvh_graphs])))
+        mesh_bvh_graph_bytes = functions.iter_to_bytes(BVHParentNode.NODES)
         self.mesh_bvh_graph_ssbo = context.buffer(mesh_bvh_graph_bytes)
         self.mesh_bvh_graph_ssbo.bind_to_storage_buffer(binding=12)
         print(f"Loading bvh graph data complete.")

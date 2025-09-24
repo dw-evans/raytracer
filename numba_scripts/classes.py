@@ -134,12 +134,19 @@ spec_triangle = [
     ("normalB0", float32[:]),
     ("normalC0", float32[:]),
     ("mesh_index", int32),
-    ("triangle_id", int32),
+    ("id", int32),
 ]
 
 
+ALL_TRIANGLES = []
+
+# @staticmethod
+# def get_all_triangles_arr():
+#     return ALL_TRIANGLES
+
 @jitclass(spec=spec_triangle)
 class Triangle:
+    # TRIANGLES = []
     def __init__(
         self,
         posA:np.ndarray,
@@ -170,8 +177,9 @@ class Triangle:
 
         self.mesh_index = mesh_parent_index
 
-        self.triangle_id = triangle_id
-    
+        self.id = triangle_id
+
+
 
     def update_pos_to_csys(self, csys:Csys) -> Triangle:
 
@@ -315,7 +323,7 @@ def triangles_to_array(triangles:list[Triangle]) -> np.ndarray:
             *tri.normalA, 0.0,
             *tri.normalB, 0.0,
             *tri.normalC, np.int32(tri.mesh_index).view(np.float32),
-            np.int32(tri.triangle_id).view(np.float32), 0.0, 0.0, 0.0,
+            np.int32(tri.id).view(np.float32), 0.0, 0.0, 0.0,
             ], 
             dtype=np.float32,
         )
@@ -324,7 +332,7 @@ def triangles_to_array(triangles:list[Triangle]) -> np.ndarray:
 
 
 @jit(nopython=True, cache=True)
-def triangles_from_obj_data(
+def create_and_register_triangles_from_obj_data(
     vertex_indices_arr: np.ndarray, vertices: np.ndarray, vertex_normals: np.ndarray, mesh_idx:int, triangle_id_start:int,
 ) -> list[Triangle]:
     ret = []

@@ -262,14 +262,16 @@ class Triangle(ByteableObject):
 
 class Mesh(ByteableObject):
     # an arbitrary counter that keeps a UID for each mesh
-    MESH_INDEX = -1
+    # MESH_INDEX = -1
+    MESHES = []
 
     def __init__(self, material: Material) -> None:
-        Mesh.MESH_INDEX += 1
+        # Mesh.MESH_INDEX += 1
         self.pos: Vector3 = Vector3((0.0, 0.0, 0.0))
         self.triangles: list[Triangle] = []
         self.csys:Csys = Csys()
-        self.mesh_index = self.MESH_INDEX
+        self.mesh_index = len(Mesh.MESHES)
+        Mesh.MESHES.append(self)
         self.material = material
         self.bvh_graph:"BVHGraph" = None
 
@@ -280,7 +282,7 @@ class Mesh(ByteableObject):
             struct.pack(
                 "2i 8x 4f 4f",
                 self.mesh_index,
-                (self.bvh_graph.nodes[0].node_id if self.bvh_graph is not None else -1),
+                self.bvh_graph.first_node_id,
                 *bbox[0], 0.0,
                 *bbox[1], 0.0,
             )
@@ -291,6 +293,7 @@ class Mesh(ByteableObject):
     # def bounding_box(self) -> any:
     #     """Calculates the bounding box representation of the mesh"""
     #     pass
+
 
     def add_tri(self, tris: Triangle | Iterable[Triangle]):
         """Method to add triangles and maintain parent mesh relationship"""
@@ -457,25 +460,23 @@ class Scene:
         )
         self.frame_number = 0
         # self.bvh_graphs:list[BVHGraph] = None
-        self.triangles:list[Triangle] = None
 
-    def reset_and_register_triangles(self):
+    def reset_and_register_triangles_and_update_their_ids(self):
+        raise NotImplementedError
         # Register all of the triangles within each mesh
         # to create the array of triangles. 
         self.triangles = []
         for m in self.meshes:
             for t in m.triangles:
-                t.triangle_id = len(self.triangles)
+                # t.triangle_id = len(self.triangles)
                 self.triangles.append(t)
+        # return Triangle.trian
 
 
-    @property
-    def bvh_graphs(self) -> list[BVHGraph]:
-        ret = []
-        for mesh in self.meshes:
-            if mesh.bvh_graph is not None:
-                ret.append(mesh.bvh_graph)
-        return ret
+    
+    def update_mesh_bvh_graph_map(self):
+        for msh in self.meshes:
+            msh.mesh_index = self.get_mesh_index(msh)
 
     def validate_mesh_indices(self):
         for msh in self.meshes:
@@ -492,6 +493,7 @@ class Scene:
         for mesh in self.meshes:
             count += len(mesh.triangles)
         return count
+
 
     # @property
     # def triangles(self) -> list[Triangle]:

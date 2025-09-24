@@ -143,7 +143,7 @@ for i, (_fname, _material, _csys) in enumerate(fname_material_pose):
 
     triangle_count_start = scene.count_triangles()
     mesh_idx = i
-    triangles = numba_scripts.classes.triangles_from_obj_data(
+    triangles = numba_scripts.classes.create_and_register_triangles_from_obj_data(
         vertex_indices_arr,
         vertices,
         vertex_normals,

@@ -103,18 +103,8 @@ atmosphere_material = Material(
 scene = Scene()
 scene.atmosphere_material = atmosphere_material
 
-meshes = []
-
-
-# material_subject = Material(
-#     color=Vector4((1.0, 0.3, 0.6, 1.0)),
-#     smoothness=1.0,
-#     transmission=0.0,
-#     ior=1.6,
-# )
-
 material_red_1 = Material(
-    Vector4((1.0, 1.0, 1.0, 1.0), dtype="f4"),
+    Vector4((1.0, 0.5, 0.5, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
     smoothness=1.0,
     specularStrength=0.2,
@@ -122,101 +112,95 @@ material_red_1 = Material(
 )
 
 csys0 = numba_scripts.classes.Csys()
+csys0.tzg(10)
 
-monkey_file="objects/monkey.obj"
+monkey_file="objects/monkey_blend2/monkey.obj"
 load_data = [
-    # ("objects/old/final_scene/wall_left.obj", material_red, csys0),
-    # ("objects/old/final_scene/wall_right.obj", material_green, csys0),
-    # ("objects/old/final_scene/wall_top.obj", material_white_upper, csys0),
-    ("objects/old/final_scene/wall_bottom.obj", material_white_lower, csys0),
-    # (r"objects\monkey.blend\wall_bottom.obj", material_white_lower, csys0),
-    # ("objects/old/final_scene/wall_front.obj", material_front_wall_animated, csys0),
-    # ("objects/old/final_scene/wall_back.obj", material_rear_wall_animated, csys0),
-    # ("objects/old/final_scene/light.obj", material_light_source_1, csys0),
-    # ("objects/old/final_scene/subject.obj", material_subject),
-    # (monkey_file:="objects/monkey.obj", material_red_1, numba_scripts.classes.Csys()),
-    (monkey_file:=monkey_file, material_red_1, Csys()),
+    # ("objects/monkey_blend/wall_top.obj", material_white_upper, csys0),
+    # ("objects/monkey_blend/wall_bottom.obj", material_white_lower, csys0),
+    # ("objects/monkey_blend/wall_left.obj", material_red, csys0),
+    # ("objects/monkey_blend/wall_right.obj", material_green, csys0),
+    # ("objects/monkey_blend/wall_front.obj", material_front_wall_animated, csys0),
+    # ("objects/monkey_blend/wall_back.obj", material_light_source_1, csys0),
+
+    ("objects/monkey_blend2/wall bottom.obj", material_white_lower, csys0),
+    ("objects/monkey_blend2/wall left.obj", material_red, csys0),
+    ("objects/monkey_blend2/wall right.obj", material_green, csys0),
+    ("objects/monkey_blend2/wall back.obj", material_light_source_1, csys0),
+    
+    # ("objects/monkey_blend2/walls test.obj", material_white_lower, csys0),
+    
+    # (monkey_file:="objects/monkey.obj", material_red_1, numba_scripts.classes.Cys()),
+    (monkey_file, material_red_1, Csys()),
 ]
 
 
-# car_csys._pos = np.array([0.0, 1.0, 8.0], dtype=np.float32)
 csys0._pos = np.array([0.0, 0.0, 0.0], dtype=np.float32)
 csys0.ryg(180)
 
-spheres = [
-    # Sphere(
-    #     pos=car_csys._pos + np.array([0.0, 1.5, 0.0]),
-    #     radius=1.0,
-    #     material=material_red_1,
-    # ),
-]
 
-scene.spheres = spheres
+from . import chunker 
+from numba_scripts.functions import timer
 
-# scene.cam.csys._pos = np.array([0.0, 2.0, 0.0], dtype=np.float32)
+import importlib
+importlib.reload(chunker)
+chunker.BVHGraph.reset()
 
-for (i, (f, material, csys)) in enumerate(load_data):
+
+wd = Path(__file__).parent.parent.parent
+
+def get_triangles_from_obj(f, mesh_idx) -> list[Triangle]:
     msh = trimesh.load(f)
 
     vertex_indices_arr = msh.faces.astype(np.int32)
     vertices = msh.vertices.astype(np.float32)
     vertex_normals = msh.vertex_normals.astype(np.float32)
     
-    triangle_count_start = scene.count_triangles() 
-    mesh_idx = i
-    triangles = numba_scripts.classes.triangles_from_obj_data(
+    # triangle_count_start = scene.count_triangles() 
+    start_offset =  len(numba_scripts.classes.ALL_TRIANGLES)
+    triangles = numba_scripts.classes.create_and_register_triangles_from_obj_data(
         vertex_indices_arr,
         vertices,
         vertex_normals,
         mesh_idx,
-        triangle_count_start,
+        start_offset,
     )
+    if not triangles:
+        raise Exception
+    # append the triangles to the all triangles list
+    numba_scripts.classes.ALL_TRIANGLES += triangles
+    return triangles
 
-    msh1 = Mesh(material=material)
+numba_scripts.classes.ALL_TRIANGLES = []
+chunker.BVHGraph.reset()
 
-    msh1.csys = csys
-    if f == monkey_file:
-        monkey_mesh = msh1
+for (i, (_f, _material, _csys)) in enumerate(load_data):
 
-    msh1.triangles = triangles
+    # f = str(wd / _f)
 
-    scene.meshes.append(msh1)
+    _triangles = get_triangles_from_obj(f=_f, mesh_idx=i)
 
+    _msh = Mesh(material=_material)
 
+    _msh.csys = _csys
+    if _f == monkey_file:
+        monkey_mesh = _msh
 
+    _msh.triangles = _triangles
+    scene.meshes.append(_msh)
 
+    timer(chunker.chunk_mesh_bvh)(_msh)
+
+    pass
+
+# monkey_mesh = _msh
+
+# Update the scene's triangles (and correct the triangles internal id...)
+# scene.reset_and_register_triangles_and_update_their_ids()
+# Update the graphs leaf triangle struct, and update the node ids
+timer(chunker.BVHGraph.register_all_and_update_node_tri_ids())
 
 print(f"There are `{scene.count_triangles()}` triangles in the scene.")
-
-# from ..animate import Animation
-# from math import sin, cos, tan, pi
-
-# import numba_scripts.classes
-
-# def mesh_csys_animate(obj: numba_scripts.classes.Csys, t, x0:Vector3):
-#     obj._pos[0] = x0[0] + 1.0 * sin(t / 2)
-#     obj._pos[1] = x0[1]
-#     obj._pos[2] = x0[2] + 1.0 * sin(t / 3)
-#     print("here")
-
-# from functools import partial
-# scene.animations.append(Animation(scene.meshes[-1].csys, partial(mesh_csys_animate, x0=scene.meshes[0].csys._pos)))
-
-START_CHUNK_SIZE_FRAC = 1.0
-
-# base_material = Material(
-#     Vector4((1.0, 1.0, 1.0, 1.0), dtype="f4"),
-#     Vector3((0.0, 0.0, 0.0), dtype="f4"),
-#     smoothness=1.0,
-#     specularStrength=0.2,
-#     ior=1.0,
-# )
-# fname = "objects/car_new/rubber.obj"
-
-# from .chunker import load_chunked_mesh_into_scene
-
-# r = load_chunked_mesh_into_scene(scene, fname, base_material, car_csys)
-
 
 keyframes_fp = Path() / "blender/camera_keyframes.csv"
 import pandas as pd
@@ -227,6 +211,7 @@ time_injectino_modified = 0.0
 import time
 import importlib
 from . import injection
+
 def animate_camera(obj:Camera, i):
     row = keyframes_df.iloc[i]
 
@@ -238,8 +223,9 @@ def animate_camera(obj:Camera, i):
 
 
 def animate_monkey(obj:Mesh, i):
-    obj.csys.set_pos([0.0, 0.0, 0.0])
-    obj.csys._pos = np.array([0.0, 1.0 + 0.2*sin(2*pi * i/60), 0.0], dtype=np.float32)
+    i=0
+    obj.csys.set_pos([0.0, 3.0, 0.0])
+    # obj.csys._pos = np.array([0.0, 1.0 + 0.2*sin(2*pi * i/60), 0.0], dtype=np.float32)
     obj.csys.quat = np.array([0, 0, 0, 1], dtype=np.float32)
     obj.csys.ryg(0 + 180 + 5 *i)
     obj.csys.rxp(30)
@@ -250,8 +236,6 @@ def animate_monkey(obj:Mesh, i):
 
     pass
     
-
-
 
 def smoothstep(edge0, edge1, x):
     # normalize x to [0, 1]
@@ -355,14 +339,15 @@ def animate_camera_params(obj:Camera, i:int):
     obj.depth_of_field_strength = 0.000
     obj.antialias_strength = 0.001
     # obj.near_plane = 8.5
+    obj.fov = 30
     obj.near_plane = Vector3(monkey_mesh.csys.pos - obj.csys.pos).squared_length ** 0.5
-    obj.bounces_per_ray = 4
+    obj.bounces_per_ray = 2
     obj.rays_per_pixel = 8
-    obj.passes_per_frame = 100
+    obj.passes_per_frame = 1000
     obj.chunksx = 5
     obj.chunksy = 5
 
-    obj.csys.pos = (2* monkey_mesh.csys.pos + obj.csys.pos) /3.0
+    # obj.csys.pos = (1* monkey_mesh.csys.pos + obj.csys.pos) /2.0
     
     # add chunking
     # def check():
@@ -375,8 +360,8 @@ def animate_camera_params(obj:Camera, i:int):
     # obj.fov
 
 def get_frame_number(obj: Scene, i):
-    i = i
-    # i = 0
+    # i = i
+    i = 15
     obj.frame_number = i
     return obj.frame_number
 
@@ -386,7 +371,7 @@ from functools import partial
 scene.animations.append(FrameAnimation(scene, get_frame_number))
 
 scene.animations.append(FrameAnimation(scene.cam, animate_camera))
-# scene.animations.append(FrameAnimation(monkey_mesh, animate_monkey))
+scene.animations.append(FrameAnimation(monkey_mesh, animate_monkey))
 scene.animations.append(FrameAnimation(material_rear_wall_animated, animate_rear_material))
 scene.animations.append(FrameAnimation(material_front_wall_animated, animate_front_material))
 scene.animations.append(FrameAnimation(material_red, partial(animate_internal_materials_specular_partial, edge0=20, edge1=45, mat0=copy.deepcopy(material_red))))
@@ -396,7 +381,6 @@ scene.animations.append(FrameAnimation(material_white_lower, partial(animate_int
 scene.animations.append(FrameAnimation(scene.cam, animate_camera_params))
 
 
-# monkey_mesh = scene.meshes[0]
 
 animate_camera(scene.cam, 0)
 # animate_monkey(monkey_mesh, 0)
@@ -406,28 +390,7 @@ animate_front_material(scene.cam, 0)
 
 
 
-
-from . import chunker 
-from numba_scripts.functions import timer
-
-import importlib
-importlib.reload(chunker)
-
-
-# chunk_mesh_bvh(monkey_mesh)
-# chunk_mesh_bvh(scene.meshes[3])
-chunker.BVHGraph.reset()
-# chunker.chunk_mesh_bvh(scene.meshes[0])
-timer(chunker.chunk_mesh_bvh)(scene.meshes[1])
-# chunk_mesh_bvh(scene.meshes[-5])
-
-import itertools
-
-scene.reset_and_register_triangles()
-
-timer(chunker.BVHGraph.register_all)()
-
-pass
-import pandas as pd
+# pass
+# import pandas as pd
 
 # pd.DataFrame([list(itertools.chain.from_iterable(x.aabb.tolist())) + [x.is_leaf(), len(x.tris)] for x in chunker.BVHGraph.GRAPHS[0].leaf_nodes])

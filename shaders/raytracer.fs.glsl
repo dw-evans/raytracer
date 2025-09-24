@@ -118,18 +118,18 @@ Triangle getTriangle(int index)
 }
 
 
-Triangle getTriangleFromId(int triId) {
-    for (int i = 0; i < triCount; i++) {
-        Triangle tri = triangles[i];  // fixed typo
-        if (tri.triId == triId) {
-            return tri;
-        }
-    }
-    // Return a default/empty triangle if not found
-    Triangle emptyTri;
-    emptyTri.triId = -1;  // mark as invalid
-    return emptyTri;
-}
+// Triangle getTriangleFromId(int triId) {
+//     for (int i = 0; i < triCount; i++) {
+//         Triangle tri = triangles[i];  // fixed typo
+//         if (tri.triId == triId) {
+//             return tri;
+//         }
+//     }
+//     // Return a default/empty triangle if not found
+//     Triangle emptyTri;
+//     emptyTri.triId = -1;  // mark as invalid
+//     return emptyTri;
+// }
 
 uniform int nodeCount;
 
@@ -154,16 +154,17 @@ layout(std430, binding=13) buffer BVHTriIdsBuffer {
 
 GraphNode getNodeFromNodeId(int nodeId) {
     // returns a node from a node id
-    for (int i = 0; i < triCount; i++) {
-        GraphNode obj = graphNodes[i];  // fixed typo
-        if (obj.id == nodeId) {
-            return obj;
-        }
-    }
-    // Return a default/empty triangle if not found
-    GraphNode obj_null;
-    obj_null.id = -1;  // mark as invalid
-    return obj_null;
+    return graphNodes[nodeId];
+    // for (int i = 0; i < triCount; i++) {
+    //     GraphNode obj = graphNodes[i];  // fixed typo
+    //     if (obj.id == nodeId) {
+    //         return obj;
+    //     }
+    // }
+    // // Return a default/empty triangle if not found
+    // GraphNode obj_null;
+    // obj_null.id = -1;  // mark as invalid
+    // return obj_null;
 }
 
 
@@ -495,49 +496,6 @@ vec3 randomDirectionHemisphere(vec3 normal, inout uint rngState)
 }
 
 
-// void rayGraphNodeCollision(Ray ray, GraphNode node, inout GraphNode[1024] g_arr, inout int index, inout int collisionsLen) {
-//     bool check;
-
-//     while g_arr[index].childId1
-//     if (node.childId1 != -1) {
-//         GraphNode child1 = getNodeFromNodeId(node.childId1);
-//         check = boundingBoxIntersect(ray, child1.bboxMin, child1.bboxMax);
-//         if check {
-//             g_arr[index] = node;
-//         }
-//     }
-//     else {
-//         GraphNode child2 = getNodeFromNodeId(node.childId2);
-//         check = boundingBoxIntersect(ray, node.bboxMin, node.bboxMax);
-//         if check {
-//             return child2;
-//         }
-//     }
-
-
-
-//     // bool check;
-//     // if (node.childId1 != -1) {
-//     //     GraphNode child1 = getNodeFromNodeId(node.childId1);
-//     //     check = boundingBoxIntersect(ray, child1.bboxMin, child1.bboxMax);
-//     //     if check {
-//     //         return child1;
-//     //     }
-//     // }
-//     // else {
-//     //     GraphNode child2 = getNodeFromNodeId(node.childId2);
-//     //     check = boundingBoxIntersect(ray, node.bboxMin, node.bboxMax);
-//     //     if check {
-//     //         return child2;
-//     //     }
-//     // }
-//     // // if we miss both, return a null one 
-//     // GraphNode ret_null;
-//     // ret_null.id = -1;
-//     // return ret_null;
-// }
-
-
 
 vec3 idToColor(int n) {
     // Use large primes to scramble bits
@@ -581,26 +539,23 @@ HitInfo calculateRayCollision(Ray ray, inout uint rngState) {
     }
 
     // loop over all of the meshesand their BVHs
-    int bbox_check_count = 0;
+    int check_count = 0;
     for (int j = 0; j < meshCount; j++) {
         
-        GraphNode graphNodeStack[16]; // stack of node ids to check
+        GraphNode graphNodeStack[256]; // stack of node ids to check
 
         Mesh mesh = meshes[j];
 
         int node0Id = mesh.node0Id;
-
-        GraphNode g = getNodeFromNodeId(mesh.node0Id);
+        GraphNode g = graphNodes[node0Id];
 
         graphNodeStack[0] = g;
 
         int stackIndex = 1;
-        // int checks = 0;
-        // int max_checks = 10;
 
-        while (stackIndex > 0)  {
+        // while (stackIndex > 0)  {
 
-        // for (int j = 0; j < 5; j++) {
+        for (int j = 0; j < 4; j++) {
 
             GraphNode node = graphNodeStack[--stackIndex];
 
@@ -609,7 +564,7 @@ HitInfo calculateRayCollision(Ray ray, inout uint rngState) {
 
             // check for collision against child 1, add it to the stack if it hits
             if (isvalid1) {
-                GraphNode child1 = getNodeFromNodeId(node.childId1);
+                GraphNode child1 = graphNodes[node.childId1];
                 bool check1 = boundingBoxIntersect(ray, child1.aabbMin, child1.aabbMax);
                 if (check1) {
                     graphNodeStack[stackIndex++] = child1;
@@ -617,34 +572,27 @@ HitInfo calculateRayCollision(Ray ray, inout uint rngState) {
             }
             // check for collision against child 2, add it to the stack if it hits
             if (isvalid2) {
-                GraphNode child2 = getNodeFromNodeId(node.childId2);
+                GraphNode child2 = graphNodes[node.childId2];
                 bool check2 = boundingBoxIntersect(ray, child2.aabbMin, child2.aabbMax);
                 if (check2) {
                     graphNodeStack[stackIndex++] = child2;
                 }
             } 
-            // if either child was valid, we can skip the comparison
+            // if one child was valid, we can skip the comparison as this is not a end node
             if (isvalid1 || isvalid2) {
                 continue;
             }
 
-            bbox_check_count += 1;
             bool check = boundingBoxIntersect(ray, node.aabbMin, node.aabbMax);
             if (check) {
 
-                // closestHit.debugInfo = idToColor(node.id) ; closestHit.didHit = true;
-                // return closestHit;
-
-                // closestHit.debugInfo.x = 1.0 ; closestHit.didHit = true;
-                // return closestHit;
                 Triangle[MAX_TRIS_REQUESTED] nodeTriangles = getTrianglesFromNode(node);
                 
                 for (int i = 0; i < node.childObjCount; i++) {
+                // for (int i = 0; i < 1000; i++) {
 
                     Triangle tri = nodeTriangles[i];
                     // Triangle tri = triangles[i];
-
-                    // hitInfo.debugInfo.x = len / 10.0;
 
                     // the ray cannot reflect off the same one it reflected off!
                     if (tri.triId == ray.prevHit.facetId) {
@@ -668,7 +616,6 @@ HitInfo calculateRayCollision(Ray ray, inout uint rngState) {
                     HitInfo triHitInfo = rayTriangle(ray, tri, doHitBackside);
                     // HitInfo triHitInfo = rayTriangle(ray, tri, true);
 
-
                     // skip if the distance is too low
                     if (triHitInfo.dst < 1e-6) {
                         continue;
@@ -682,11 +629,11 @@ HitInfo calculateRayCollision(Ray ray, inout uint rngState) {
             }
         }
     }
-    int threshold = 100;
-    closestHit.debugInfo = vec3(1.0, 1.0, 1.0) * bbox_check_count / float(threshold);
-    if (bbox_check_count > threshold) {
-        closestHit.debugInfo = vec3(1.0, 0.0, 1.0);
-    }
+    // int threshold = 10;
+    // closestHit.debugInfo = vec3(1.0, 1.0, 1.0) * check_count / float(threshold);
+    // if (check_count > threshold) {
+    //     closestHit.debugInfo = vec3(1.0, 0.0, 1.0);
+    // }
     return closestHit;
 }
 
@@ -1045,11 +992,12 @@ void main()
         totalIncomingLight += traceRay(newRay, rngState);
         // totalIncomingLight += traceRay(ray, rngState);
 
-        float weight = 0.00;
+        float weight = 0.1;
         if (i == (RAYS_PER_PIXEL - 1))
         {
             // totalIncomingLight = totalIncomingLight * (1-weight) + weight * newRay.dir;
             totalIncomingLight = totalIncomingLight * (1-weight) + weight * newRay.prevHit.debugInfo;
+            // totalIncomingLight = totalIncomingLight * (1-weight) + weight * vec3(1.0, 0.0, 1.0);
             // totalIncomingLight = totalIncomingLight * (1-weight) + weight * abs(newRay.prevHit.normal);
             // totalIncomingLight = totalIncomingLight * (1-weight) + weight * (-newRay.prevHits.normal);
             // totalIncomingLight = totalIncomingLight * (1-weight) + weight * abs(newRay.prevHit.dst);
