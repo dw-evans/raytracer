@@ -112,40 +112,39 @@ material_red_1 = Material(
 )
 
 csys0 = numba_scripts.classes.Csys()
-csys0.tzg(10)
 
-monkey_file="objects/monkey_blend2/monkey.obj"
+# monkey_file="objects/monkey_blend2/monkey.obj"
+monkey_file="objects/monkey.obj"
 load_data = [
-    # ("objects/monkey_blend/wall_top.obj", material_white_upper, csys0),
-    # ("objects/monkey_blend/wall_bottom.obj", material_white_lower, csys0),
-    # ("objects/monkey_blend/wall_left.obj", material_red, csys0),
-    # ("objects/monkey_blend/wall_right.obj", material_green, csys0),
-    # ("objects/monkey_blend/wall_front.obj", material_front_wall_animated, csys0),
-    # ("objects/monkey_blend/wall_back.obj", material_light_source_1, csys0),
+    # ("objects/monkey_blend2/wall left.obj", material_red, csys0),
+    (monkey_file, material_red_1, Csys()),
 
-    ("objects/monkey_blend2/wall bottom.obj", material_white_lower, csys0),
-    ("objects/monkey_blend2/wall left.obj", material_red, csys0),
-    ("objects/monkey_blend2/wall right.obj", material_green, csys0),
-    ("objects/monkey_blend2/wall back.obj", material_light_source_1, csys0),
+    ("objects/old/final_scene/wall_top.obj", material_white_upper, csys0),
+    ("objects/old/final_scene/wall_bottom.obj", material_white_lower, csys0),
+    ("objects/old/final_scene/wall_left.obj", material_red, csys0),
+    ("objects/old/final_scene/wall_right.obj", material_green, csys0),
+    ("objects/old/final_scene/wall_front.obj", material_front_wall_animated, csys0),
+    ("objects/old/final_scene/wall_back.obj", material_rear_wall_animated, csys0),
+    ("objects/old/final_scene/light.obj", material_light_source_1, csys0),
+
+    # ("objects/monkey_blend2/wall bottom.obj", material_white_lower, csys0),
+    # ("objects/monkey_blend2/wall right.obj", material_green, csys0),
+    # ("objects/monkey_blend2/wall back.obj", material_rear_wall_animated, csys0),
     
     # ("objects/monkey_blend2/walls test.obj", material_white_lower, csys0),
     
     # (monkey_file:="objects/monkey.obj", material_red_1, numba_scripts.classes.Cys()),
-    (monkey_file, material_red_1, Csys()),
 ]
 
 
 csys0._pos = np.array([0.0, 0.0, 0.0], dtype=np.float32)
 csys0.ryg(180)
 
-
 from . import chunker 
 from numba_scripts.functions import timer
 
 import importlib
 importlib.reload(chunker)
-chunker.BVHGraph.reset()
-
 
 wd = Path(__file__).parent.parent.parent
 
@@ -156,8 +155,7 @@ def get_triangles_from_obj(f, mesh_idx) -> list[Triangle]:
     vertices = msh.vertices.astype(np.float32)
     vertex_normals = msh.vertex_normals.astype(np.float32)
     
-    # triangle_count_start = scene.count_triangles() 
-    start_offset =  len(numba_scripts.classes.ALL_TRIANGLES)
+    start_offset = len(numba_scripts.classes.get_all_triangles_arr())
     triangles = numba_scripts.classes.create_and_register_triangles_from_obj_data(
         vertex_indices_arr,
         vertices,
@@ -168,19 +166,20 @@ def get_triangles_from_obj(f, mesh_idx) -> list[Triangle]:
     if not triangles:
         raise Exception
     # append the triangles to the all triangles list
-    numba_scripts.classes.ALL_TRIANGLES += triangles
+    numba_scripts.classes.add_to_all_triangles(triangles)
     return triangles
 
-numba_scripts.classes.ALL_TRIANGLES = []
+# Reset all triangles, meshes, graphs and nodes
+numba_scripts.classes.reset_all_triangles()
+Mesh.reset()
 chunker.BVHGraph.reset()
+chunker.BVHParentNode.reset()
 
 for (i, (_f, _material, _csys)) in enumerate(load_data):
 
-    # f = str(wd / _f)
-
-    _triangles = get_triangles_from_obj(f=_f, mesh_idx=i)
-
     _msh = Mesh(material=_material)
+    _triangles = get_triangles_from_obj(f=_f, mesh_idx=_msh.id)
+
 
     _msh.csys = _csys
     if _f == monkey_file:
@@ -192,8 +191,6 @@ for (i, (_f, _material, _csys)) in enumerate(load_data):
     timer(chunker.chunk_mesh_bvh)(_msh)
 
     pass
-
-# monkey_mesh = _msh
 
 # Update the scene's triangles (and correct the triangles internal id...)
 # scene.reset_and_register_triangles_and_update_their_ids()
@@ -223,9 +220,9 @@ def animate_camera(obj:Camera, i):
 
 
 def animate_monkey(obj:Mesh, i):
-    i=0
-    obj.csys.set_pos([0.0, 3.0, 0.0])
-    # obj.csys._pos = np.array([0.0, 1.0 + 0.2*sin(2*pi * i/60), 0.0], dtype=np.float32)
+    # i=0
+    # obj.csys.set_pos([0.0, 3.0, 0.0])
+    obj.csys._pos = np.array([0.0, 1.0 + 0.2*sin(2*pi * i/60), 0.0], dtype=np.float32)
     obj.csys.quat = np.array([0, 0, 0, 1], dtype=np.float32)
     obj.csys.ryg(0 + 180 + 5 *i)
     obj.csys.rxp(30)
@@ -340,12 +337,13 @@ def animate_camera_params(obj:Camera, i:int):
     obj.antialias_strength = 0.001
     # obj.near_plane = 8.5
     obj.fov = 30
-    obj.near_plane = Vector3(monkey_mesh.csys.pos - obj.csys.pos).squared_length ** 0.5
-    obj.bounces_per_ray = 2
-    obj.rays_per_pixel = 8
-    obj.passes_per_frame = 1000
-    obj.chunksx = 5
-    obj.chunksy = 5
+    if globals().get("monkey_mesh", None):
+        obj.near_plane = Vector3(monkey_mesh.csys.pos - obj.csys.pos).squared_length ** 0.5
+    obj.bounces_per_ray = 4
+    obj.rays_per_pixel = 2
+    obj.passes_per_frame = 4
+    obj.chunksx = 1
+    obj.chunksy = 1
 
     # obj.csys.pos = (1* monkey_mesh.csys.pos + obj.csys.pos) /2.0
     
@@ -360,8 +358,8 @@ def animate_camera_params(obj:Camera, i:int):
     # obj.fov
 
 def get_frame_number(obj: Scene, i):
-    # i = i
-    i = 15
+    i = i
+    # i = 15
     obj.frame_number = i
     return obj.frame_number
 

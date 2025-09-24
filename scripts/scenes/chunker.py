@@ -8,6 +8,7 @@ import numba_scripts.classes
 
 from numba_scripts.classes import Csys
 import struct
+from numba_scripts.functions import timer
 
 
 # def load_mesh_into_scene(_scene:Scene, _fname:str, _material:Material, _csys:Csys, start_chunk_size_frac:float=0.5):
@@ -102,7 +103,7 @@ def load_chunked_mesh_into_scene(_scene:Scene, _fname:str, _material:Material, _
 
         # create mesh and triangles and add to scene
         mymesh = Mesh(material=_material)
-        mesh_idx = mymesh.mesh_index
+        mesh_idx = mymesh.id
 
         triangle_count_start = _scene.count_triangles() 
 
@@ -266,11 +267,11 @@ def plot_aabbs_filled(aabbs, face_color="cyan", edge_color="k", alpha=0.3):
 
 class BVHGraph(object):
     BVH_TRI_ID_LIST_GLOBAL = []
-    GRAPHS:list[BVHGraph] = []
+    ALL:list[BVHGraph] = []
     
     def __init__(self, mesh:"Mesh"):
-        self.id = len(BVHGraph.GRAPHS)
-        BVHGraph.GRAPHS.append(self)
+        self.id = len(BVHGraph.ALL)
+        BVHGraph.ALL.append(self)
         
         self.mesh = mesh
         self._nodes:list[BVHParentNode] = []
@@ -282,6 +283,11 @@ class BVHGraph(object):
     def first_node_id(self):
         return self._nodes[0].id
     
+    @classmethod
+    def reset(cls):
+        cls.ALL = []
+        cls.BVH_TRI_ID_LIST_GLOBAL = []
+
     def register_node(self, obj):
         self._nodes.append(obj)
 
@@ -300,32 +306,33 @@ class BVHGraph(object):
                 pass
         pass
 
+
+
     @staticmethod
     def register_all_and_update_node_tri_ids():
         BVHGraph.BVH_TRI_ID_LIST_GLOBAL = []
-        for g in BVHGraph.GRAPHS:
+        for g in BVHGraph.ALL:
             g.update_leaf_nodes_and_tri_ids()
             for node in g.leaf_nodes:
                 node.tris_start_offset = len(BVHGraph.BVH_TRI_ID_LIST_GLOBAL)
                 BVHGraph.BVH_TRI_ID_LIST_GLOBAL += node.tri_ids.tolist()
 
-            
 
     @staticmethod
     def reset():
         BVHGraph.BVH_TRI_ID_LIST_GLOBAL = []
-        BVHGraph.GRAPHS = [] 
+        BVHGraph.ALL = [] 
 
 
 
 AABB_NULL = pyrr.aabb.create_from_points(np.array([0.0, 0.0, 0.0]))
 class BVHParentNode:
-    NODES:list[BVHParentNode] = []
+    ALL:list[BVHParentNode] = []
 
     def __init__(self, graph:BVHGraph, tris, depth):
         self.graph = graph
-        self.id = len(BVHParentNode.NODES)
-        BVHParentNode.NODES.append(self)
+        self.id = len(BVHParentNode.ALL)
+        BVHParentNode.ALL.append(self)
 
         self.depth = depth
 
@@ -354,6 +361,10 @@ class BVHParentNode:
         # self.tris_count = len(self.tris)
         # self.tris_start_offset = self.graph.add_tri_ids_get_start_offset(self.tri_ids.tolist())
         pass
+
+    @classmethod
+    def reset(cls):
+        cls.ALL = []
 
     @property
     def child_left_id(self):
@@ -386,6 +397,19 @@ class BVHParentNode:
         if self.child_right is not None:
             self.child_right.split_recursively(max_depth=max_depth)
         pass
+
+    @staticmethod
+    def update_aabs_for_changed_triangles():
+        print("updating node graph for modified triangles")
+        def fn():
+            for i, x in enumerate(BVHParentNode.ALL):
+                x.update_for_modified_triangles()
+        timer(fn)()
+        print(f"updated {len(BVHGraph.ALL)} node aabbs")
+
+    def update_for_modified_triangles(self):
+        self._update_vertices()
+        self._update_aabb()
 
     def _update_vertices(self):
         self.vertices = np.array([x.positions for x in self.tris])
@@ -422,15 +446,6 @@ class BVHParentNode:
             else:
                 tris_right.append(j)
 
-        # tl = [self.tris[x] for x in tris_left]
-        # tr = [self.tris[x] for x in tris_right]
-
-        # vl = np.array([x.positions for x in tl])
-        # vr = np.array([x.positions for x in tr])
-
-        # aabbl = pyrr.aabb.create_from_points(vl.reshape(-1, 3))
-        # aabbr = pyrr.aabb.create_from_points(vr.reshape(-1, 3))
-
         # the length of a child is equal to the parent. No splitting has occurred!
         if (not tris_left) or (not tris_right):
             # return without making the children
@@ -440,7 +455,6 @@ class BVHParentNode:
             self.child_left = BVHParentNode(graph=self.graph, tris=[self.tris[x] for x in tris_left], depth=self.depth + 1)
         if tris_right:
             self.child_right = BVHParentNode(graph=self.graph, tris=[self.tris[x] for x in tris_right], depth=self.depth + 1)
-
 
 
     def tobytes(self):
@@ -454,4 +468,6 @@ class BVHParentNode:
             (self.tris_start_offset if self.tris_start_offset is not None else -1),
             self.tris_count,
         )
+    
+
     

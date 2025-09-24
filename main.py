@@ -469,7 +469,7 @@ def main_loop():
                                 if hits:
                                     obj = hits[0][1]
                                     if isinstance(obj, Triangle):
-                                        SELECTED_MESH_ID = obj.parent.mesh_index
+                                        SELECTED_MESH_ID = obj.parent.id
                                         prog1["selectedMeshId"].write(
                                             struct.pack("i", SELECTED_MESH_ID)
                                         )
@@ -623,10 +623,10 @@ def listener_loop():
         command = input("Enter your command >> ")
 
         print(f"selected index = {SELECTED_MESH_ID}")
-        print([m.mesh_index for m in scene.meshes])
+        print([m.id for m in scene.meshes])
 
         try:
-            msh: Mesh = [m for m in scene.meshes if m.mesh_index == SELECTED_MESH_ID][0]
+            msh: Mesh = [m for m in scene.meshes if m.id == SELECTED_MESH_ID][0]
         except IndexError:
             print("Mesh not valid")
             continue

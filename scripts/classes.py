@@ -209,7 +209,7 @@ class Triangle(ByteableObject):
                 *self.normalA.astype("f4"),
                 *self.normalB.astype("f4"),
                 *self.normalC.astype("f4"),
-                self.parent.mesh_index,
+                self.parent.id,
                 self.triangle_id,
             )
             # + self.material.tobytes()
@@ -263,15 +263,15 @@ class Triangle(ByteableObject):
 class Mesh(ByteableObject):
     # an arbitrary counter that keeps a UID for each mesh
     # MESH_INDEX = -1
-    MESHES = []
+    ALL = []
 
     def __init__(self, material: Material) -> None:
         # Mesh.MESH_INDEX += 1
         self.pos: Vector3 = Vector3((0.0, 0.0, 0.0))
         self.triangles: list[Triangle] = []
         self.csys:Csys = Csys()
-        self.mesh_index = len(Mesh.MESHES)
-        Mesh.MESHES.append(self)
+        self.id = len(Mesh.ALL)
+        Mesh.ALL.append(self)
         self.material = material
         self.bvh_graph:"BVHGraph" = None
 
@@ -281,19 +281,23 @@ class Mesh(ByteableObject):
         return (
             struct.pack(
                 "2i 8x 4f 4f",
-                self.mesh_index,
+                self.id,
                 self.bvh_graph.first_node_id,
                 *bbox[0], 0.0,
                 *bbox[1], 0.0,
             )
             + self.material.tobytes()
         )
+    
 
     # @property
     # def bounding_box(self) -> any:
     #     """Calculates the bounding box representation of the mesh"""
     #     pass
 
+    @classmethod
+    def reset(cls):
+        cls.ALL = []
 
     def add_tri(self, tris: Triangle | Iterable[Triangle]):
         """Method to add triangles and maintain parent mesh relationship"""
@@ -476,11 +480,11 @@ class Scene:
     
     def update_mesh_bvh_graph_map(self):
         for msh in self.meshes:
-            msh.mesh_index = self.get_mesh_index(msh)
+            msh.id = self.get_mesh_index(msh)
 
     def validate_mesh_indices(self):
         for msh in self.meshes:
-            msh.mesh_index = self.get_mesh_index(msh)
+            msh.id = self.get_mesh_index(msh)
 
     def get_mesh_index(self, msh: Mesh) -> int:
         try:

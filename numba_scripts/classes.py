@@ -140,6 +140,17 @@ spec_triangle = [
 
 ALL_TRIANGLES = []
 
+def add_to_all_triangles(l):
+    global ALL_TRIANGLES
+    ALL_TRIANGLES += l
+
+def reset_all_triangles():
+    global ALL_TRIANGLES
+    ALL_TRIANGLES = []
+
+def get_all_triangles_arr():
+    return ALL_TRIANGLES
+
 # @staticmethod
 # def get_all_triangles_arr():
 #     return ALL_TRIANGLES

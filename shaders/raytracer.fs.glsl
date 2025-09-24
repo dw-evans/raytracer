@@ -118,18 +118,18 @@ Triangle getTriangle(int index)
 }
 
 
-// Triangle getTriangleFromId(int triId) {
-//     for (int i = 0; i < triCount; i++) {
-//         Triangle tri = triangles[i];  // fixed typo
-//         if (tri.triId == triId) {
-//             return tri;
-//         }
-//     }
-//     // Return a default/empty triangle if not found
-//     Triangle emptyTri;
-//     emptyTri.triId = -1;  // mark as invalid
-//     return emptyTri;
-// }
+Triangle getTriangleFromId(int triId) {
+    for (int i = 0; i < triCount; i++) {
+        Triangle tri = triangles[i];  // fixed typo
+        if (tri.triId == triId) {
+            return tri;
+        }
+    }
+    // Return a default/empty triangle if not found
+    Triangle emptyTri;
+    emptyTri.triId = -1;  // mark as invalid
+    return emptyTri;
+}
 
 uniform int nodeCount;
 
@@ -540,22 +540,20 @@ HitInfo calculateRayCollision(Ray ray, inout uint rngState) {
 
     // loop over all of the meshesand their BVHs
     int check_count = 0;
+    // for (int j = 0; j < meshCount; j++) {
     for (int j = 0; j < meshCount; j++) {
         
-        GraphNode graphNodeStack[256]; // stack of node ids to check
-
         Mesh mesh = meshes[j];
 
         int node0Id = mesh.node0Id;
         GraphNode g = graphNodes[node0Id];
 
+        GraphNode graphNodeStack[16]; // stack of node ids to check
         graphNodeStack[0] = g;
 
         int stackIndex = 1;
 
-        // while (stackIndex > 0)  {
-
-        for (int j = 0; j < 4; j++) {
+        while (stackIndex > 0)  {
 
             GraphNode node = graphNodeStack[--stackIndex];
 
@@ -586,6 +584,8 @@ HitInfo calculateRayCollision(Ray ray, inout uint rngState) {
             bool check = boundingBoxIntersect(ray, node.aabbMin, node.aabbMax);
             if (check) {
 
+                check_count += 1;
+                
                 Triangle[MAX_TRIS_REQUESTED] nodeTriangles = getTrianglesFromNode(node);
                 
                 for (int i = 0; i < node.childObjCount; i++) {
@@ -614,7 +614,6 @@ HitInfo calculateRayCollision(Ray ray, inout uint rngState) {
 
                     // calculate the rayTriangle intersection 
                     HitInfo triHitInfo = rayTriangle(ray, tri, doHitBackside);
-                    // HitInfo triHitInfo = rayTriangle(ray, tri, true);
 
                     // skip if the distance is too low
                     if (triHitInfo.dst < 1e-6) {
@@ -624,12 +623,14 @@ HitInfo calculateRayCollision(Ray ray, inout uint rngState) {
                     if ((triHitInfo.didHit) && (triHitInfo.dst < closestHit.dst)) {
                         closestHit = triHitInfo;
                         closestHit.material = meshes[tri.meshIndex].material;
+                        closestHit.debugInfo = vec3(triHitInfo.dst/2.0);
                     }
                 }
             }
         }
     }
-    // int threshold = 10;
+    // int threshold = 1;
+    // closestHit.debugInfo = vec3(1.0, 1.0, 1.0) * check_count / float(threshold);
     // closestHit.debugInfo = vec3(1.0, 1.0, 1.0) * check_count / float(threshold);
     // if (check_count > threshold) {
     //     closestHit.debugInfo = vec3(1.0, 0.0, 1.0);
@@ -992,7 +993,7 @@ void main()
         totalIncomingLight += traceRay(newRay, rngState);
         // totalIncomingLight += traceRay(ray, rngState);
 
-        float weight = 0.1;
+        float weight = 0.0;
         if (i == (RAYS_PER_PIXEL - 1))
         {
             // totalIncomingLight = totalIncomingLight * (1-weight) + weight * newRay.dir;

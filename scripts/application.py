@@ -355,7 +355,7 @@ class Application:
         if self.is_animating:
             print(f"Frame Number Animation = {i}")
             self.display_scene.animate_frame(frame=i)
-            # self.display_program.configure_program(self.display_scene)
+            self.display_program.configure_program(self.display_scene)
 
 
     class ShaderHandler(FileSystemEventHandler):
@@ -768,7 +768,7 @@ class DefaultShaderProgram(ProgramABC):
                 cam.csys.rxp(dpitch)
                 pass
 
-
+from .scenes.chunker import BVHGraph, BVHParentNode
 class RayTracerDynamic(ProgramABC):
     name = "raytracer"
 
@@ -891,6 +891,10 @@ class RayTracerDynamic(ProgramABC):
                 numba_scripts.classes.update_triangles_to_csys(mesh.triangles, mesh.csys)
         timer(update_triangle_positions)()
 
+        def update_graph_aabbs():
+            BVHParentNode.update_aabs_for_changed_triangles()
+        timer(update_graph_aabbs)()
+
         print(f"Loading triangles into SSBO...")
         triangle_data = timer(numba_scripts.classes.triangles_to_array)(triangles)
         triangle_bytes = triangle_data.tobytes()
@@ -900,7 +904,8 @@ class RayTracerDynamic(ProgramABC):
         print(f"Loading triangles complete.")
 
         print(f"Loading meshes into SSBO...")
-        mesh_buffer = context.buffer(functions.iter_to_bytes(scene.meshes))
+        # mesh_buffer = context.buffer(functions.iter_to_bytes(scene.meshes))
+        mesh_buffer = context.buffer(functions.iter_to_bytes(Mesh.ALL))
         mesh_buffer_binding = 10
         program["meshBuffer"].binding = mesh_buffer_binding
         mesh_buffer.bind_to_uniform_block(mesh_buffer_binding)
@@ -914,11 +919,8 @@ class RayTracerDynamic(ProgramABC):
         program["materialBuffer"].binding = material_buffer_binding
         material_buffer.bind_to_uniform_block(material_buffer_binding)
 
-        from .scenes.chunker import BVHGraph, BVHParentNode
-        import itertools
-
         print(f"Loading bvh graph data into SSBO...")
-        mesh_bvh_graph_bytes = functions.iter_to_bytes(BVHParentNode.NODES)
+        mesh_bvh_graph_bytes = functions.iter_to_bytes(BVHParentNode.ALL)
         self.mesh_bvh_graph_ssbo = context.buffer(mesh_bvh_graph_bytes)
         self.mesh_bvh_graph_ssbo.bind_to_storage_buffer(binding=12)
         print(f"Loading bvh graph data complete.")
@@ -1096,6 +1098,7 @@ class RayTracerDynamic(ProgramABC):
 
         # animate based on the frame
         self.app.animate_frame(self.app_frame_counter)
+
 
         program["depthOfFieldStrength"].write(struct.pack("f", cam.depth_of_field_strength))
         program["antialiasStrength"].write(struct.pack("f", cam.antialias_strength))
