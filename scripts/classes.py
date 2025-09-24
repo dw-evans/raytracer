@@ -274,7 +274,8 @@ class Mesh(ByteableObject):
         Mesh.ALL.append(self)
         self.material = material
         self.bvh_graph:"BVHGraph" = None
-
+        self.is_awaiting_mesh_update = None
+        self.flag_for_mesh_update()
 
     def tobytes(self) -> bytes | bytearray:
         bbox = self.bounding_box
@@ -289,6 +290,11 @@ class Mesh(ByteableObject):
             + self.material.tobytes()
         )
     
+    def flag_for_mesh_update(self):
+        self.is_awaiting_mesh_update = True
+
+    def unflag_for_mesh_update(self):
+        self.is_awaiting_mesh_update = False
 
     # @property
     # def bounding_box(self) -> any:

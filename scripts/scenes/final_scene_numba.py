@@ -103,8 +103,8 @@ atmosphere_material = Material(
 scene = Scene()
 scene.atmosphere_material = atmosphere_material
 
-material_red_1 = Material(
-    Vector4((1.0, 0.5, 0.5, 1.0), dtype="f4"),
+material_subject = Material(
+    Vector4((1.0, 1.0, 1.0, 1.0), dtype="f4"),
     Vector3((0.0, 0.0, 0.0), dtype="f4"),
     smoothness=1.0,
     specularStrength=0.2,
@@ -117,7 +117,7 @@ csys0 = numba_scripts.classes.Csys()
 monkey_file="objects/monkey.obj"
 load_data = [
     # ("objects/monkey_blend2/wall left.obj", material_red, csys0),
-    (monkey_file, material_red_1, Csys()),
+    (monkey_file, material_subject, Csys()),
 
     ("objects/old/final_scene/wall_top.obj", material_white_upper, csys0),
     ("objects/old/final_scene/wall_bottom.obj", material_white_lower, csys0),
@@ -226,6 +226,7 @@ def animate_monkey(obj:Mesh, i):
     obj.csys.quat = np.array([0, 0, 0, 1], dtype=np.float32)
     obj.csys.ryg(0 + 180 + 5 *i)
     obj.csys.rxp(30)
+    obj.flag_for_mesh_update()
     # t = triangles[0]
     # p0 = t.positions
     # numba_scripts.classes.update_triangles_to_csys(obj.triangles, obj.csys)
@@ -337,11 +338,12 @@ def animate_camera_params(obj:Camera, i:int):
     obj.antialias_strength = 0.001
     # obj.near_plane = 8.5
     obj.fov = 30
-    if globals().get("monkey_mesh", None):
-        obj.near_plane = Vector3(monkey_mesh.csys.pos - obj.csys.pos).squared_length ** 0.5
-    obj.bounces_per_ray = 4
-    obj.rays_per_pixel = 2
-    obj.passes_per_frame = 4
+    # if globals().get("monkey_mesh", None):
+    #     obj.near_plane = Vector3(monkey_mesh.csys.pos - obj.csys.pos).squared_length ** 0.5
+    obj.near_plane = Vector3(monkey_mesh.csys.pos - obj.csys.pos).squared_length ** 0.5
+    obj.bounces_per_ray = 8
+    obj.rays_per_pixel = 1
+    obj.passes_per_frame = 1
     obj.chunksx = 1
     obj.chunksy = 1
 
@@ -358,8 +360,8 @@ def animate_camera_params(obj:Camera, i:int):
     # obj.fov
 
 def get_frame_number(obj: Scene, i):
+    # i = i
     i = i
-    # i = 15
     obj.frame_number = i
     return obj.frame_number
 

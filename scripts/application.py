@@ -86,7 +86,7 @@ class Application:
     ) -> None:
         # window params
 
-        factor = 4
+        factor = 1
         self.DYNAMIC_RENDER_FRAMERATE = 24
 
 
@@ -355,7 +355,7 @@ class Application:
         if self.is_animating:
             print(f"Frame Number Animation = {i}")
             self.display_scene.animate_frame(frame=i)
-            self.display_program.configure_program(self.display_scene)
+            self.display_program.configure_buffers_and_uniforms(self.display_scene)
 
 
     class ShaderHandler(FileSystemEventHandler):
@@ -546,6 +546,9 @@ class ProgramABC(ABC):
         )
 
     def configure_program(self, scene: Scene) -> None:
+        raise NotImplementedError
+    
+    def configure_buffers_and_uniforms(self, scene:Scene) -> None:
         raise NotImplementedError
 
     def calculate_frame(self, scene: Scene) -> None:
@@ -855,20 +858,25 @@ class RayTracerDynamic(ProgramABC):
         self.cycle_counter = 0
         self.shader_rng_counter = 0
 
+
         program["STATIC_RENDER"].write(struct.pack("i", True))
-        # program["STATIC_RENDER"].write(struct.pack("i", False))
         program["MAX_BOUNCES"].write(struct.pack("i", self.MAX_RAY_BOUNCES))
         program["RAYS_PER_PIXEL"].write(struct.pack("i", self.RAYS_PER_PIXEL))
-        # program["RAYS_PER_PIXEL"].write(struct.pack("i", 1))
 
         texture = context.texture((self.width, self.height), 3)
         texture.use(location=1)
         program["previousFrame"] = 1
 
-        # initialise the uniforms
-        program["screenWidth"].write(struct.pack("i", self.width))
-        # program["screenHeight"].write(struct.pack("i", self.height))
+        self.configure_buffers_and_uniforms(scene)
 
+        # initialise the uniforms
+        
+    def configure_buffers_and_uniforms(self, scene:Scene):
+        program = self.program
+        spheres = scene.spheres
+        context = self.context
+
+        program["screenWidth"].write(struct.pack("i", self.width))
         program["spheresCount"].write(struct.pack("i", len(spheres)))
 
         sphere_buffer_binding = 1
@@ -888,11 +896,16 @@ class RayTracerDynamic(ProgramABC):
         print(f"Updating Triangle Positions...")
         def update_triangle_positions():
             for mesh in scene.meshes:
-                numba_scripts.classes.update_triangles_to_csys(mesh.triangles, mesh.csys)
+                if mesh.is_awaiting_mesh_update:
+                    numba_scripts.classes.update_triangles_to_csys(mesh.triangles, mesh.csys)
+                    mesh.bvh_graph.flag_for_mesh_update()
+                    mesh.unflag_for_mesh_update()
         timer(update_triangle_positions)()
 
         def update_graph_aabbs():
-            BVHParentNode.update_aabs_for_changed_triangles()
+            for graph in BVHGraph.ALL:
+                graph.update_graph_node_aabbs_for_changed_triangles(force=False)
+                
         timer(update_graph_aabbs)()
 
         print(f"Loading triangles into SSBO...")
@@ -986,8 +999,6 @@ class RayTracerDynamic(ProgramABC):
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     sys.exit()
-
-
 
         program["chunksx"].write(struct.pack("i", chunksx))
         program["chunksy"].write(struct.pack("i", chunksy))
@@ -1128,7 +1139,7 @@ class RayTracerDynamic(ProgramABC):
                 self.calculate_frame_via_chunking(scene, chunksx=scene.cam.chunksx, chunksy=scene.cam.chunksy, force_flip_once=True)
                 print(f"cycle={scene.cam.cycle_counter}")
                 # if not (scene.cam.cycle_counter % 10):
-                # self.save_frame(self.fboB, self.app_frame_counter, cam.cycle_counter)
+                self.save_frame(self.fboB, self.app_frame_counter, cam.cycle_counter)
                 # time.sleep(0.01)
                 pass
 

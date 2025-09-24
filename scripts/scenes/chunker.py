@@ -278,6 +278,13 @@ class BVHGraph(object):
         # self.tri_id_list:list[int] = []
         self.leaf_nodes:list[BVHParentNode] = None
         # self.node_start_index_map = {}
+        self.is_awaiting_mesh_update = False
+
+    def flag_for_mesh_update(self):
+        self.is_awaiting_mesh_update = True
+
+    def unflag_for_mesh_update(self):
+        self.is_awaiting_mesh_update = False
 
     @property
     def first_node_id(self):
@@ -322,6 +329,21 @@ class BVHGraph(object):
     def reset():
         BVHGraph.BVH_TRI_ID_LIST_GLOBAL = []
         BVHGraph.ALL = [] 
+
+    def update_graph_node_aabbs_for_changed_triangles(self, force=False):
+        # print("updating node graph for modified triangles")
+        def fn():
+            if (not force) and (not self.is_awaiting_mesh_update):
+                return
+            
+            for i, x in enumerate(self._nodes):
+                x.update_for_modified_triangles()
+
+            self.unflag_for_mesh_update()
+
+        fn()
+        # timer(fn)()
+        # print(f"updated {len(BVHGraph.ALL)} node aabbs")
 
 
 
@@ -399,11 +421,14 @@ class BVHParentNode:
         pass
 
     @staticmethod
-    def update_aabs_for_changed_triangles():
+    def update_aabs_for_changed_triangles(force=False):
         print("updating node graph for modified triangles")
         def fn():
             for i, x in enumerate(BVHParentNode.ALL):
-                x.update_for_modified_triangles()
+                if force or x.graph.is_awaiting_mesh_update:
+                    x.update_for_modified_triangles()
+                else:
+                    pass
         timer(fn)()
         print(f"updated {len(BVHGraph.ALL)} node aabbs")
 
