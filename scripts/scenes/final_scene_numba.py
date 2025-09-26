@@ -1,4 +1,4 @@
-from ..classes import (
+from scripts.classes import (
     Scene,
     Mesh,
     Triangle,
@@ -22,7 +22,10 @@ from pathlib import Path
 
 import trimesh
 import numpy as np
-import numba_scripts.classes
+import scripts.numba_utils.classes
+
+from . import chunker 
+from scripts.numba_utils.functions import timer
 
 
 material_red = Material(
@@ -118,8 +121,8 @@ material_floor = Material(
     specularStrength=0.2,
 )
 
-csys0 = numba_scripts.classes.Csys()
-csys_dragon = numba_scripts.classes.Csys()
+csys0 = scripts.numba_utils.classes.Csys()
+csys_dragon = scripts.numba_utils.classes.Csys()
 csys_dragon.ryg(0)
 
 # monkey_file="objects/monkey_blend2/monkey.obj"
@@ -142,8 +145,7 @@ load_data = [
 csys0._pos = np.array([0.0, 0.0, 0.0], dtype=np.float32)
 csys0.ryg(-90)
 
-from . import chunker 
-from numba_scripts.functions import timer
+
 
 import importlib
 importlib.reload(chunker)
@@ -157,8 +159,8 @@ def get_triangles_from_obj(f, mesh_idx) -> list[Triangle]:
     vertices = msh.vertices.astype(np.float32)
     vertex_normals = msh.vertex_normals.astype(np.float32)
     
-    start_offset = len(numba_scripts.classes.get_all_triangles_arr())
-    triangles = numba_scripts.classes.create_and_register_triangles_from_obj_data(
+    start_offset = len(scripts.numba_utils.classes.get_all_triangles_arr())
+    triangles = scripts.numba_utils.classes.create_and_register_triangles_from_obj_data(
         vertex_indices_arr,
         vertices,
         vertex_normals,
@@ -168,12 +170,12 @@ def get_triangles_from_obj(f, mesh_idx) -> list[Triangle]:
     if not triangles:
         raise Exception
     # append the triangles to the all triangles list
-    numba_scripts.classes.add_to_all_triangles(triangles)
+    scripts.numba_utils.classes.add_to_all_triangles(triangles)
     return triangles
 
 
 # Reset all triangles, meshes, graphs and nodes
-numba_scripts.classes.reset_all_triangles()
+scripts.numba_utils.classes.reset_all_triangles()
 Mesh.reset()
 chunker.BVHGraph.reset()
 chunker.BVHParentNode.reset()
@@ -216,11 +218,6 @@ from math import radians, degrees, sin, cos, pi
 time_injectino_modified = 0.0
 import time
 import importlib
-from . import injection
-
-FRAMERATE = 30
-def time_to_frame(val):
-    return 
 
 def animate_camera(obj:Camera, i):
     row = keyframes_df.iloc[i]
@@ -242,7 +239,7 @@ def animate_monkey(obj:Mesh, i):
     obj.flag_for_mesh_update()
     # t = triangles[0]
     # p0 = t.positions
-    # numba_scripts.classes.update_triangles_to_csys(obj.triangles, obj.csys)
+    # scripts.numba_utils.classes.update_triangles_to_csys(obj.triangles, obj.csys)
     # p1 = t.positions
 
     pass

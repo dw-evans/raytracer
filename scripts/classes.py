@@ -453,7 +453,7 @@ class Camera:
         )
 
 
-from numba_scripts.classes import Csys
+from .numba_utils.classes import Csys
 
 
 class Scene:

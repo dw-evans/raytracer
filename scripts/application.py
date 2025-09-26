@@ -10,25 +10,19 @@ import struct
 
 from scripts import functions
 
-from scripts import classes
-from scripts.classes import (
+from . import classes
+from .classes import (
     Scene,
     Sphere,
-    # Triangle,
     Mesh,
     Camera,
-    # Csys,
     Material,
     HitInfo,
 )
 
-import numba_scripts.classes
-from numba_scripts.classes import (
-    Triangle,
-    Csys,
-)
-
-from numba_scripts.functions import timer
+import scripts.numba_utils.classes
+from scripts.numba_utils.classes import Triangle, Csys
+from scripts.numba_utils.functions import timer
 
 import pyrr
 from pyrr import (
@@ -611,13 +605,13 @@ class DefaultShaderProgram(ProgramABC):
 
         print(f"Updating Triangle Positions...")
         # numba_scripts.classes.update_triangles_to_csys(triangles, scene.meshes[0].csys)
-        timer(numba_scripts.classes.update_triangles_to_csys)(
+        timer(scripts.numba_utils.classes.update_triangles_to_csys)(
             triangles, scene.meshes[0].csys
         )
 
         print(f"Loading triangles into SSBO...")
         # triangle_data = numba_scripts.classes.triangles_to_array(triangles)
-        triangle_data = timer(numba_scripts.classes.triangles_to_array)(triangles)
+        triangle_data = timer(scripts.numba_utils.classes.triangles_to_array)(triangles)
         # triangle_data = numba_scripts.classes.many_triangles_to_bytes(triangles)
         triangle_bytes = triangle_data.tobytes()
 
@@ -886,7 +880,7 @@ class RayTracerDynamic(ProgramABC):
             sphere_buffer = context.buffer(sphere_bytes)
             sphere_buffer.bind_to_uniform_block(self.sphere_buffer_binding)
 
-        triangles = numba_scripts.classes.get_all_triangles_arr()
+        triangles = scripts.numba_utils.classes.get_all_triangles_arr()
 
         program["meshCount"].write(struct.pack("i", len(scene.meshes)))
 
@@ -894,7 +888,7 @@ class RayTracerDynamic(ProgramABC):
         def update_triangle_positions():
             for mesh in scene.meshes:
                 if mesh.is_awaiting_mesh_update:
-                    numba_scripts.classes.update_triangles_to_csys(mesh.triangles, mesh.csys)
+                    scripts.numba_utils.classes.update_triangles_to_csys(mesh.triangles, mesh.csys)
                     mesh.bvh_graph.flag_for_mesh_update()
                     mesh.unflag_for_mesh_update()
         timer(update_triangle_positions)()
@@ -906,7 +900,7 @@ class RayTracerDynamic(ProgramABC):
         timer(update_graph_aabbs)()
 
         print(f"Loading triangles into SSBO...")
-        triangle_data = timer(numba_scripts.classes.triangles_to_array)(triangles)
+        triangle_data = timer(scripts.numba_utils.classes.triangles_to_array)(triangles)
         triangle_bytes = triangle_data.tobytes()
         self.triangles_ssbo = context.buffer(triangle_bytes)
         triangles_ssbo_binding = 9
