@@ -210,7 +210,7 @@ timer(chunker.BVHGraph.register_all_and_update_node_tri_ids())
 
 print(f"There are `{scene.count_triangles()}` triangles in the scene.")
 
-keyframes_fp = Path() / "blender/camera_keyframes.csv"
+keyframes_fp = Path() / "input/camera_keyframes.csv"
 import pandas as pd
 keyframes_df = pd.read_csv(keyframes_fp)
 from math import radians, degrees, sin, cos, pi
