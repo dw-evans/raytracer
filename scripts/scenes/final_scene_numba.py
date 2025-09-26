@@ -126,19 +126,19 @@ csys_dragon = scripts.numba_utils.classes.Csys()
 csys_dragon.ryg(0)
 
 # monkey_file="objects/monkey_blend2/monkey.obj"
-monkey_file="objects/monkey.blend/monkey.obj"
+monkey_file="objects/monkey_blend/monkey.obj"
 
 load_data = [
     # (monkey_file, material_subject, Csys()),
-    ("objects/monkey.blend/dragon.obj", material_subject, csys_dragon),
-    ("objects/monkey.blend/wall_top.obj", material_white_upper, csys0),
-    ("objects/monkey.blend/wall_bottom.obj", material_white_lower, csys0),
-    ("objects/monkey.blend/wall_left.obj", material_red, csys0),
-    ("objects/monkey.blend/wall_right.obj", material_green, csys0),
-    ("objects/monkey.blend/wall_front.obj", material_front_wall_animated, csys0),
-    ("objects/monkey.blend/wall_back.obj", material_rear_wall_animated, csys0),
-    ("objects/monkey.blend/light.obj", material_light_source_1, csys0),
-    ("objects/monkey.blend/ground.obj", material_floor, csys0),
+    ("objects/monkey_blend/dragon.obj", material_subject, csys_dragon),
+    ("objects/monkey_blend/wall_top.obj", material_white_upper, csys0),
+    ("objects/monkey_blend/wall_bottom.obj", material_white_lower, csys0),
+    ("objects/monkey_blend/wall_left.obj", material_red, csys0),
+    ("objects/monkey_blend/wall_right.obj", material_green, csys0),
+    ("objects/monkey_blend/wall_front.obj", material_front_wall_animated, csys0),
+    ("objects/monkey_blend/wall_back.obj", material_rear_wall_animated, csys0),
+    ("objects/monkey_blend/light.obj", material_light_source_1, csys0),
+    ("objects/monkey_blend/ground.obj", material_floor, csys0),
 ]
 
 

@@ -6,7 +6,7 @@
         {
             "label": "run py",
             "type": "shell",
-            "command": ".env/scripts/python.exe",
+            "command": ".venv/scripts/python.exe",
             "args": [
                 "${workspaceFolder}/run.py"
             ],

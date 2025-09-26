@@ -67,6 +67,9 @@ from watchdog.events import FileSystemEventHandler
 # MAX_TRIANGLES_TO_LOAD = 1_000
 
 
+HEADLESS = True
+
+
 def check_for_errors(ctx: moderngl.Context):
     error = ctx.error
     if error:
@@ -117,34 +120,34 @@ class Application:
 
         self.MOUSE_LAST_POS: list[float] = [0, 0]
         self.MMB_PRESSED: bool = False
+        if not HEADLESS:
+            pygame.init()
 
-        pygame.init()
+            self.screen = pygame.display.set_mode(
+                (self.WINDOW_WIDTH, self.WINDOW_HEIGHT),
+                pygame.OPENGL | pygame.DOUBLEBUF,
+            )
+            pygame.display.gl_set_attribute(pygame.GL_SWAP_CONTROL, 0)
+            pygame.display.gl_set_attribute(
+                pygame.GL_CONTEXT_FLAGS, pygame.GL_CONTEXT_DEBUG_FLAG
+            )
+            self.clock = pygame.time.Clock()
 
-        self.screen = pygame.display.set_mode(
-            (self.WINDOW_WIDTH, self.WINDOW_HEIGHT),
-            pygame.OPENGL | pygame.DOUBLEBUF,
-        )
-        pygame.display.gl_set_attribute(pygame.GL_SWAP_CONTROL, 0)
-        pygame.display.gl_set_attribute(
-            pygame.GL_CONTEXT_FLAGS, pygame.GL_CONTEXT_DEBUG_FLAG
-        )
-
-        self.clock = pygame.time.Clock()
         self.display_scene = SCENE.scene
 
         # self.display_scene.validate_mesh_indices()
 
         # self.display_scene.cam.fov = 30
 
-        self.register_program(
-            DefaultShaderProgram(
-                app=self,
-                file_fragment_shader="shaders/dumb.fs.glsl",
-                file_vertex_shader="shaders/dumb.vs.glsl",
-                width=self.RENDER_WIDTH,
-                height=self.RENDER_HEIGHT,
-            ),
-        )
+        # self.register_program(
+        #     DefaultShaderProgram(
+        #         app=self,
+        #         file_fragment_shader="shaders/dumb.fs.glsl",
+        #         file_vertex_shader="shaders/dumb.vs.glsl",
+        #         width=self.RENDER_WIDTH,
+        #         height=self.RENDER_HEIGHT,
+        #     ),
+        # )
         # Something can generate a memory leak here
         # It literally happens if I change anything in the main function
         # wtf...
@@ -177,7 +180,7 @@ class Application:
         self.export_directory = (
             Path()
             / "renders/application"
-            / f"{datetime.datetime.now().strftime("%Y.%m.%d_%H%M%S")}"
+            / f"{datetime.datetime.now().strftime('%Y.%m.%d_%H%M%S')}"
         )
         self.export_directory.mkdir(parents=True)
 
@@ -282,51 +285,53 @@ class Application:
                 **options,
             )
 
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-                    pygame.quit()
-                    sys.exit()
+            if not HEADLESS:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        running = False
+                        pygame.quit()
+                        sys.exit()
 
-                elif event.type == pygame.KEYDOWN:
-                    # TAB is used to togggle which renderer to use. Not sure how it knows which
-                    # one to be writing to the screen
-                    if event.key == pygame.K_TAB:
-                        if not self.is_waiting_to_toggle:
-                            self.is_waiting_to_toggle = True
-                            self.toggle_renderer()
-                            self.run()
+                    elif event.type == pygame.KEYDOWN:
+                        # TAB is used to togggle which renderer to use. Not sure how it knows which
+                        # one to be writing to the screen
+                        if event.key == pygame.K_TAB:
+                            if not self.is_waiting_to_toggle:
+                                self.is_waiting_to_toggle = True
+                                self.toggle_renderer()
+                                self.run()
 
-                    # H will be used to return to time zero
-                    elif event.key == pygame.K_h:
-                        if not self.reset_anim_key_pressed:
-                            self.reset_anim_key_pressed = True
-                            self.is_animating = False
-                            self.animation_clock = 0
-                    # J will be used to play/pause
-                    elif event.key == pygame.K_j:
-                        if not self.pause_play_anim_key_pressed:
-                            self.pause_play_anim_key_pressed = True
-                            if not self.is_animating:
-                                self.is_animating = True
-                            else:
+                        # H will be used to return to time zero
+                        elif event.key == pygame.K_h:
+                            if not self.reset_anim_key_pressed:
+                                self.reset_anim_key_pressed = True
                                 self.is_animating = False
+                                self.animation_clock = 0
+                        # J will be used to play/pause
+                        elif event.key == pygame.K_j:
+                            if not self.pause_play_anim_key_pressed:
+                                self.pause_play_anim_key_pressed = True
+                                if not self.is_animating:
+                                    self.is_animating = True
+                                else:
+                                    self.is_animating = False
 
-                elif event.type == pygame.KEYUP:
-                    if event.key == pygame.K_TAB:
-                        self.is_waiting_to_toggle = False
+                    elif event.type == pygame.KEYUP:
+                        if event.key == pygame.K_TAB:
+                            self.is_waiting_to_toggle = False
 
-                    elif event.key == pygame.K_h:
-                        self.reset_anim_key_pressed = False
+                        elif event.key == pygame.K_h:
+                            self.reset_anim_key_pressed = False
 
-                    elif event.key == pygame.K_j:
-                        self.pause_play_anim_key_pressed = False
+                        elif event.key == pygame.K_j:
+                            self.pause_play_anim_key_pressed = False
 
-                program_event_handler(event)
+                    program_event_handler(event)
 
             self.display_program.calculate_frame(self.display_scene)
             # pygame.display.flip()
-            self.clock.tick(self.DYNAMIC_RENDER_FRAMERATE)
+            if not HEADLESS:
+                self.clock.tick(self.DYNAMIC_RENDER_FRAMERATE)
 
         self.watchdog.join()
 
@@ -489,11 +494,18 @@ class ProgramABC(ABC):
         self.height = height
         self.standalone = standalone
 
-        self.context = moderngl.create_context(
-            require=require,
-            standalone=standalone,
-            debug=True,
-        )
+        if not HEADLESS:
+            self.context = moderngl.create_context(
+                require=require,
+                standalone=standalone,
+                debug=True,
+            )
+        else:
+            # self.context = moderngl.create_standalone_context(backend="egl")
+            self.context = moderngl.create_standalone_context()
+        
+        # if IS_OFFSCREEN:
+        #     self.context = moderngl.cr
 
         self.initialise()
 
@@ -776,7 +788,7 @@ class RayTracerDynamic(ProgramABC):
         file_fragment_shader: str,
         width: int,
         height: int,
-        standalone=False,
+        standalone=not HEADLESS,
         require=460,
     ) -> None:
         super().__init__(
@@ -1009,12 +1021,14 @@ class RayTracerDynamic(ProgramABC):
 
                 # if (_t - time_of_last_render) > time_between_renders:
                 if True:
-                    render_to_screen(self.texA)
-                    handle_pg_events()
+                    if not HEADLESS:
+                        render_to_screen(self.texA)
+                        handle_pg_events()
 
                 context.finish()
 
-                self.app.clock.tick(1000)
+                if not HEADLESS:
+                    self.app.clock.tick(1000)
 
                 # swap the textures at the end of rendering
                 self.fboA, self.fboB = self.fboB, self.fboA
@@ -1040,7 +1054,7 @@ class RayTracerDynamic(ProgramABC):
             self.target_dir = (
                 Path()
                 / "renders/RayTracerDynamic"
-                / f"{datetime.datetime.now().strftime("%Y.%m.%d_%H%M%S")}"
+                / f"{datetime.datetime.now().strftime('%Y.%m.%d_%H%M%S')}"
             )
             self.target_dir.mkdir(parents=True)
 
@@ -1075,8 +1089,8 @@ class RayTracerDynamic(ProgramABC):
 
         self.fboA, self.fboB = self.fboB, self.fboA
         self.texA, self.texB = self.texB, self.texA
-
-        pygame.display.flip()
+        if not HEADLESS:
+            pygame.display.flip()
 
     def calculate_frame(self, scene: Scene):
         import time
@@ -1162,6 +1176,8 @@ class RayTracerDynamic(ProgramABC):
         """
         If there is any movement of the camera, set flag to reset the cycles
         """
+
+        return
 
         cam_linear_speed_adjusted = app.cam_linear_speed_adjusted
         cam_roll_speed_adjusted = app.cam_roll_speed_adjusted

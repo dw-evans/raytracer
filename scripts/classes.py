@@ -5,7 +5,6 @@ from pyrr import Vector4, Vector3, Matrix44, Matrix33
 import struct
 import numpy as np
 from numpy import radians, tan, cos, sin
-from stl import mesh
 import copy
 import pyrr
 import trimesh
@@ -320,6 +319,7 @@ class Mesh(ByteableObject):
     @classmethod
     def from_stl(cls, file: str, material: Material = Material()):
         """Creates a mesh from a stl file"""
+        from stl import mesh
         mesh_data = mesh.Mesh.from_file(file)
         ret = Mesh(material=material)
         tris = []

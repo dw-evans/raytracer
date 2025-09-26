@@ -1,7 +1,9 @@
-from scripts.application import Application
+import scripts.application
+
 
 if __name__ == "__main__":
-    app = Application()
+    scripts.application.HEADLESS = True
+    app = scripts.application.Application()
     app.start()
 
   
