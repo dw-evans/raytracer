@@ -261,9 +261,15 @@ def plot_aabbs_filled(aabbs, face_color="cyan", edge_color="k", alpha=0.3):
     plt.show()
 
 
+from numba import jit, njit
+from numba.types import float32, int32
+from numba.experimental import jitclass
 
 
-
+# spec_bvhgraph = [
+#     ("id", int32),
+#     ("mesh_index", int32),
+# ]
 
 class BVHGraph(object):
     BVH_TRI_ID_LIST_GLOBAL = []

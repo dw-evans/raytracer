@@ -111,34 +111,36 @@ material_subject = Material(
     ior=1.0,
 )
 
+material_floor = Material(
+    Vector4((1.0, 1.0, 1.0, 1.0), dtype="f4"),
+    Vector3((0.0, 0.0, 0.0), dtype="f4"),
+    smoothness=0.2,
+    specularStrength=0.2,
+)
+
 csys0 = numba_scripts.classes.Csys()
+csys_dragon = numba_scripts.classes.Csys()
+csys_dragon.ryg(0)
 
 # monkey_file="objects/monkey_blend2/monkey.obj"
-monkey_file="objects/monkey.obj"
+monkey_file="objects/monkey.blend/monkey.obj"
+
 load_data = [
-    # ("objects/monkey_blend2/wall left.obj", material_red, csys0),
-    (monkey_file, material_subject, Csys()),
-
-    ("objects/old/final_scene/wall_top.obj", material_white_upper, csys0),
-    ("objects/old/final_scene/wall_bottom.obj", material_white_lower, csys0),
-    ("objects/old/final_scene/wall_left.obj", material_red, csys0),
-    ("objects/old/final_scene/wall_right.obj", material_green, csys0),
-    ("objects/old/final_scene/wall_front.obj", material_front_wall_animated, csys0),
-    ("objects/old/final_scene/wall_back.obj", material_rear_wall_animated, csys0),
-    ("objects/old/final_scene/light.obj", material_light_source_1, csys0),
-
-    # ("objects/monkey_blend2/wall bottom.obj", material_white_lower, csys0),
-    # ("objects/monkey_blend2/wall right.obj", material_green, csys0),
-    # ("objects/monkey_blend2/wall back.obj", material_rear_wall_animated, csys0),
-    
-    # ("objects/monkey_blend2/walls test.obj", material_white_lower, csys0),
-    
-    # (monkey_file:="objects/monkey.obj", material_red_1, numba_scripts.classes.Cys()),
+    # (monkey_file, material_subject, Csys()),
+    ("objects/monkey.blend/dragon.obj", material_subject, csys_dragon),
+    ("objects/monkey.blend/wall_top.obj", material_white_upper, csys0),
+    ("objects/monkey.blend/wall_bottom.obj", material_white_lower, csys0),
+    ("objects/monkey.blend/wall_left.obj", material_red, csys0),
+    ("objects/monkey.blend/wall_right.obj", material_green, csys0),
+    ("objects/monkey.blend/wall_front.obj", material_front_wall_animated, csys0),
+    ("objects/monkey.blend/wall_back.obj", material_rear_wall_animated, csys0),
+    ("objects/monkey.blend/light.obj", material_light_source_1, csys0),
+    ("objects/monkey.blend/ground.obj", material_floor, csys0),
 ]
 
 
 csys0._pos = np.array([0.0, 0.0, 0.0], dtype=np.float32)
-csys0.ryg(180)
+csys0.ryg(-90)
 
 from . import chunker 
 from numba_scripts.functions import timer
@@ -169,11 +171,14 @@ def get_triangles_from_obj(f, mesh_idx) -> list[Triangle]:
     numba_scripts.classes.add_to_all_triangles(triangles)
     return triangles
 
+
 # Reset all triangles, meshes, graphs and nodes
 numba_scripts.classes.reset_all_triangles()
 Mesh.reset()
 chunker.BVHGraph.reset()
 chunker.BVHParentNode.reset()
+
+pass
 
 for (i, (_f, _material, _csys)) in enumerate(load_data):
 
@@ -192,6 +197,10 @@ for (i, (_f, _material, _csys)) in enumerate(load_data):
 
     pass
 
+# if globals().get("monkey_file", None):
+#     print("warning bodged monkey mesh!")
+#     monkey_file = _msh
+
 # Update the scene's triangles (and correct the triangles internal id...)
 # scene.reset_and_register_triangles_and_update_their_ids()
 # Update the graphs leaf triangle struct, and update the node ids
@@ -208,6 +217,10 @@ time_injectino_modified = 0.0
 import time
 import importlib
 from . import injection
+
+FRAMERATE = 30
+def time_to_frame(val):
+    return 
 
 def animate_camera(obj:Camera, i):
     row = keyframes_df.iloc[i]
@@ -242,8 +255,8 @@ def smoothstep(edge0, edge1, x):
 
 
 def animate_rear_material(obj:Material, i):
-    edge0 = 0
-    edge1 = 30
+    edge0 = 20
+    edge1 = 50
     mat1 = Material(
         Vector4((0.0, 0.0, 1.0, 1.0), dtype="f4"),
         Vector3((0.0, 0.0, 0.0), dtype="f4"),
@@ -278,10 +291,11 @@ def animate_front_material(obj:Material, i):
     obj.transparent_from_behind = True
     transmission = 0.0
 
-    if i < 30:
+    edge1a = 80
+    if i < edge1a:
         # No wall to a blue wall
-        edge0 = 25
-        edge1 = 30
+        edge0 = edge1a - 30
+        edge1 = edge1a
         ss = smoothstep(edge0, edge1, i)
         obj.color = Vector4((1.0, 1.0, 1.0, 1.0))
         obj.transparent_from_behind = True
@@ -301,8 +315,8 @@ def animate_front_material(obj:Material, i):
     # elif i < 150:
     else:
         # blue wall to a mirror
-        edge0 = 45
-        edge1 = 60
+        edge0 = max(60, edge1a)
+        edge1 = edge0 + 15
         ss = smoothstep(edge0, edge1, i)
 
         _mat1 = Material(
@@ -334,20 +348,21 @@ def animate_internal_materials_specular_partial(obj:Material, i:int, edge0:int, 
 def animate_camera_params(obj:Camera, i:int):
     # obj.depth_of_field_strength = 0.02
     # obj.depth_of_field_strength = 0.1
-    obj.depth_of_field_strength = 0.000
+    obj.depth_of_field_strength = 0.00
     obj.antialias_strength = 0.001
     # obj.near_plane = 8.5
-    obj.fov = 30
-    # if globals().get("monkey_mesh", None):
-    #     obj.near_plane = Vector3(monkey_mesh.csys.pos - obj.csys.pos).squared_length ** 0.5
-    obj.near_plane = Vector3(monkey_mesh.csys.pos - obj.csys.pos).squared_length ** 0.5
-    obj.bounces_per_ray = 8
+    # obj.fov = 39.6
+    obj.fov = 15
+    if globals().get("monkey_mesh", None):
+        obj.near_plane = Vector3(monkey_mesh.csys.pos - obj.csys.pos).squared_length ** 0.5
+        obj.csys.pos = (1.0* monkey_mesh.csys.pos + obj.csys.pos) /2.0
+    # obj.near_plane = Vector3(monkey_mesh.csys.pos - obj.csys.pos).squared_length ** 0.5
+    obj.bounces_per_ray = 6
     obj.rays_per_pixel = 1
-    obj.passes_per_frame = 1
-    obj.chunksx = 1
-    obj.chunksy = 1
+    obj.passes_per_frame = 10000
+    obj.chunksx = 2
+    obj.chunksy = 2
 
-    # obj.csys.pos = (1* monkey_mesh.csys.pos + obj.csys.pos) /2.0
     
     # add chunking
     # def check():
@@ -359,27 +374,43 @@ def animate_camera_params(obj:Camera, i:int):
     # obj.aspect
     # obj.fov
 
+def blend(factor, a, b):
+    return factor * a + (1-factor) * b
+
+def animate_light_material(obj:Material, i, initial_material:Material):
+    edge0 = 50
+    edge1 = edge0 + 20
+    ss = smoothstep(edge0, edge1, i)
+    obj.emissionStrength = (1-ss) * initial_material.emissionStrength + ss * initial_material.emissionStrength * 5.0
+
+
 def get_frame_number(obj: Scene, i):
     # i = i
-    i = i
+    i = 120
     obj.frame_number = i
     return obj.frame_number
+
 
 
 import copy
 from functools import partial
 scene.animations.append(FrameAnimation(scene, get_frame_number))
 
+"""
+keyframes
+
+"""
+
 scene.animations.append(FrameAnimation(scene.cam, animate_camera))
-scene.animations.append(FrameAnimation(monkey_mesh, animate_monkey))
+# scene.animations.append(FrameAnimation(monkey_mesh, animate_monkey))
 scene.animations.append(FrameAnimation(material_rear_wall_animated, animate_rear_material))
 scene.animations.append(FrameAnimation(material_front_wall_animated, animate_front_material))
-scene.animations.append(FrameAnimation(material_red, partial(animate_internal_materials_specular_partial, edge0=20, edge1=45, mat0=copy.deepcopy(material_red))))
-scene.animations.append(FrameAnimation(material_green, partial(animate_internal_materials_specular_partial, edge0=25, edge1=50, mat0=copy.deepcopy(material_green))))
-scene.animations.append(FrameAnimation(material_white_upper, partial(animate_internal_materials_specular_partial, edge0=25, edge1=50, mat0=copy.deepcopy(material_white_upper))))
-scene.animations.append(FrameAnimation(material_white_lower, partial(animate_internal_materials_specular_partial, edge0=30, edge1=55, mat0=copy.deepcopy(material_white_lower))))
+scene.animations.append(FrameAnimation(material_red, partial(animate_internal_materials_specular_partial, edge0=120, edge1=150, mat0=copy.deepcopy(material_red))))
+scene.animations.append(FrameAnimation(material_green, partial(animate_internal_materials_specular_partial, edge0=150, edge1=180, mat0=copy.deepcopy(material_green))))
+scene.animations.append(FrameAnimation(material_white_upper, partial(animate_internal_materials_specular_partial, edge0=90, edge1=120, mat0=copy.deepcopy(material_white_upper))))
+scene.animations.append(FrameAnimation(material_white_lower, partial(animate_internal_materials_specular_partial, edge0=60, edge1=90, mat0=copy.deepcopy(material_white_lower))))
 scene.animations.append(FrameAnimation(scene.cam, animate_camera_params))
-
+scene.animations.append(FrameAnimation(material_light_source_1, partial(animate_light_material, initial_material=copy.deepcopy(material_light_source_1))))
 
 
 animate_camera(scene.cam, 0)
@@ -394,3 +425,4 @@ animate_front_material(scene.cam, 0)
 # import pandas as pd
 
 # pd.DataFrame([list(itertools.chain.from_iterable(x.aabb.tolist())) + [x.is_leaf(), len(x.tris)] for x in chunker.BVHGraph.GRAPHS[0].leaf_nodes])
+

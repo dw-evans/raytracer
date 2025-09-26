@@ -886,10 +886,7 @@ class RayTracerDynamic(ProgramABC):
             sphere_buffer = context.buffer(sphere_bytes)
             sphere_buffer.bind_to_uniform_block(self.sphere_buffer_binding)
 
-        # triangles = scene.triangles
-        triangles = numba_scripts.classes.ALL_TRIANGLES
-        n_triangles = len(triangles)
-        # program["triCount"].write(struct.pack("i", n_triangles))
+        triangles = numba_scripts.classes.get_all_triangles_arr()
 
         program["meshCount"].write(struct.pack("i", len(scene.meshes)))
 
