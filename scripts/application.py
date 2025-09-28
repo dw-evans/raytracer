@@ -7,7 +7,8 @@ import moderngl
 from typing import Protocol
 from abc import ABC
 import struct
-
+import json
+from pathlib import Path
 from scripts import functions
 
 from . import classes
@@ -45,9 +46,18 @@ from typing import Generator
 # from scripts.scenes import basic_scene
 # from scripts.scenes import animated_scene
 # from scripts.scenes import numba_test_scene
-from scripts.scenes import final_scene_numba
+# from scripts.scenes import final_scene_numba
+# SCENE = final_scene_numba
+# from scripts.scenes import dragon_scene
+# SCENE = dragon_scene
 
-SCENE = final_scene_numba
+import typing
+if typing.TYPE_CHECKING:
+    import types
+
+def set_scene(mod: "types.ModuleType"):
+    global SCENE
+    SCENE = mod
 
 def reload_scene():
     pass
@@ -66,6 +76,16 @@ from watchdog.events import FileSystemEventHandler
 
 # MAX_TRIANGLES_TO_LOAD = 1_000
 
+def read_json(fp:Path):
+    if not fp.exists():
+        return fp
+    with open(fp, "r") as f:
+        return json.loads(f.read())
+    
+def write_json(fp:Path, data, indent=None):
+    with open(fp, "w") as f:
+        f.write(json.dumps(data), indent=indent)
+
 
 HEADLESS = True
 
@@ -74,6 +94,23 @@ def check_for_errors(ctx: moderngl.Context):
     error = ctx.error
     if error:
         print(f"OpenGL Error: {error}")
+
+
+def compute_chunks(width, height, chunksx, chunksy):
+    chunk_w = width // chunksx
+    chunk_h = height // chunksy
+
+    rects = []
+    for i in range(chunksx):
+        for j in range(chunksy):
+            x = i * chunk_w
+            # Flip Y: OpenGL origin is bottom-left
+            y = height - (j + 1) * chunk_h
+            w = chunk_w if i < chunksx - 1 else width - x
+            h = chunk_h if j < chunksy - 1 else height - j * chunk_h
+            rects.append((x, y, w, h))
+
+    return np.array(rects, dtype=np.int32)
 
 
 class Application:
@@ -348,8 +385,8 @@ class Application:
             print(self.animation_clock)
             self.display_scene.animate(time=self.animation_clock)
             # self.display_program.configure_program(self.display_scene)
-
             self.animation_clock = self.animation_clock + self.dt
+
     def animate_frame(self, i):
         if self.is_animating:
             print(f"Frame Number Animation = {i}")
@@ -504,6 +541,8 @@ class ProgramABC(ABC):
             # self.context = moderngl.create_standalone_context(backend="egl")
             self.context = moderngl.create_standalone_context()
         
+        self.context.enable(moderngl.BLEND)
+
         # if IS_OFFSCREEN:
         #     self.context = moderngl.cr
 
@@ -951,8 +990,8 @@ class RayTracerDynamic(ProgramABC):
 
         # program["chunksx"].write(struct.pack("i", self.app.CHUNKSX))
         # program["chunksy"].write(struct.pack("i", self.app.CHUNKSY))
-        program["chunksx"].write(struct.pack("i", 1))
-        program["chunksy"].write(struct.pack("i", 1))
+        # program["chunksx"].write(struct.pack("i", 1))
+        # program["chunksy"].write(struct.pack("i", 1))
 
         program["MAX_CYCLES"].write(struct.pack("i", self.app.MAX_CYCLES))
 
@@ -1003,39 +1042,41 @@ class RayTracerDynamic(ProgramABC):
                 if event.type == pygame.QUIT:
                     sys.exit()
 
-        program["chunksx"].write(struct.pack("i", chunksx))
-        program["chunksy"].write(struct.pack("i", chunksy))
-        for i in range(chunksx):
-            for j in range(chunksy):
-                program["chunkx"].write(struct.pack("i", i))
-                program["chunky"].write(struct.pack("i", j))
+        # program["chunksx"].write(struct.pack("i", chunksx))
+        # program["chunksy"].write(struct.pack("i", chunksy))
 
-                # use texB as the previous frame sampler
-                self.texB.use(location=1)
-                # render to fboA
-                self.fboA.use()
-                vao.render(mode=moderngl.TRIANGLE_STRIP)
+        rects = compute_chunks(self.app.RENDER_WIDTH, self.app.RENDER_HEIGHT, chunksx, chunksy)
 
-                _t = time.time_ns()
-                print(f"{i:03d}, {j:03d}: {(_t-time_of_last_render) / 1e6} ms")
+        _t = time.time_ns()
+        self.texB.use(location=1)
+        for r in rects:
+            self.fboA.use()
+            x, y, w, h = r
+            print(f"Chunk: x={x}, y={y}, w={w}, h={h}")
+            self.context.scissor = (x, y, w, h)
+            vao.render(mode=moderngl.TRIANGLE_STRIP)
+            _t2 = time.time_ns()
+            _t = _t2
 
-                # if (_t - time_of_last_render) > time_between_renders:
-                if True:
-                    if not HEADLESS:
-                        render_to_screen(self.texA)
-                        handle_pg_events()
-
-                context.finish()
-
+            if True:
                 if not HEADLESS:
-                    self.app.clock.tick(1000)
+                    render_to_screen(self.texA)
+                    handle_pg_events()
 
-                # swap the textures at the end of rendering
-                self.fboA, self.fboB = self.fboB, self.fboA
-                self.texA, self.texB = self.texB, self.texA
+            # context.finish()
 
-
+            if not HEADLESS:
+                # self.app.clock.tick(20)
                 pass
+
+            pass
+
+        # swap the textures at the end of rendering
+        self.fboA, self.fboB = self.fboB, self.fboA
+        self.texA, self.texB = self.texB, self.texA
+        self.context.scissor = None
+
+        context.finish()
 
         # force one render per cycle
         # if force_flip_once and (not has_flipped):
@@ -1046,7 +1087,7 @@ class RayTracerDynamic(ProgramABC):
 
         gc.enable()
 
-        time.sleep(0.001)
+        # time.sleep(0.001)
         return
 
     def save_frame(self, fbo, frame, cycle):
@@ -1062,21 +1103,33 @@ class RayTracerDynamic(ProgramABC):
         buffer = fbo.read(components=3, dtype="f4")
         hdr_data = np.frombuffer(buffer, dtype=np.float32)
         hdr_data = hdr_data.reshape((self.height, self.width, 3))
+        hdr_data_flipped = np.flip(hdr_data, axis=0)
         
         rgb = np.clip(hdr_data, 0.0, 1.0)
         rgb_flipped = np.flip(rgb, axis=0)
         rgb_display = rgb_flipped
         display_8bit = (rgb_display[..., :3] * 255).astype(np.uint8)
         import imageio
-        imageio.imwrite(self.target_dir / f"f{frame:05}_c{cycle:05}.png", display_8bit, format="png")
+        stem = f"f{frame:05}_c{cycle:05}"
+        print(f"saving to {self.target_dir / stem}*")
+        imageio.imwrite(self.target_dir / f"{stem}_f1.png", display_8bit, format="png")
+        imageio.imwrite(self.target_dir / f"{stem}_f4.exr", hdr_data_flipped, format="exr")
+        
+
+        # status_file = Path("status.json")
+        # existing = read_json(status_file)
+        # if "data" not in existing:
+        #     existing["data"] = []
+        # existing["data"].append({"frame": frame, "cycle": cycle, "datetime": datetime.datetime.now().isoformat(timespec="milliseconds")})
+        # write_json(status_file, existing, indent=4)
         pass
 
     def calculate_frame_no_chunk_and_show(self):
 
-        self.program["chunksx"].write(struct.pack("i", 1))
-        self.program["chunksy"].write(struct.pack("i", 1))
-        self.program["chunkx"].write(struct.pack("i", 0))
-        self.program["chunky"].write(struct.pack("i", 0))
+        # self.program["chunksx"].write(struct.pack("i", 1))
+        # self.program["chunksy"].write(struct.pack("i", 1))
+        # self.program["chunkx"].write(struct.pack("i", 0))
+        # self.program["chunky"].write(struct.pack("i", 0))
 
         self.texB.use(location=1)
         self.fboA.use()
@@ -1089,6 +1142,8 @@ class RayTracerDynamic(ProgramABC):
 
         self.fboA, self.fboB = self.fboB, self.fboA
         self.texA, self.texB = self.texB, self.texA
+
+        self.context.finish()
         if not HEADLESS:
             pygame.display.flip()
 
@@ -1143,8 +1198,8 @@ class RayTracerDynamic(ProgramABC):
                 program["frameNumber"].write(struct.pack("I", scene.cam.cycle_counter))
                 self.calculate_frame_via_chunking(scene, chunksx=scene.cam.chunksx, chunksy=scene.cam.chunksy, force_flip_once=True)
                 print(f"cycle={scene.cam.cycle_counter}")
-                # if not (scene.cam.cycle_counter % 10):
-                self.save_frame(self.fboB, self.app_frame_counter, cam.cycle_counter)
+                if not (scene.cam.cycle_counter % 10):
+                    self.save_frame(self.fboB, self.app_frame_counter, cam.cycle_counter)
                 # time.sleep(0.01)
                 pass
 

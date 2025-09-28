@@ -145,40 +145,18 @@ load_data = [
 csys0._pos = np.array([0.0, 0.0, 0.0], dtype=np.float32)
 csys0.ryg(-90)
 
-
-
 import importlib
 importlib.reload(chunker)
 
 wd = Path(__file__).parent.parent.parent
 
-def get_triangles_from_obj(f, mesh_idx) -> list[Triangle]:
-    msh = trimesh.load(f)
 
-    vertex_indices_arr = msh.faces.astype(np.int32)
-    vertices = msh.vertices.astype(np.float32)
-    vertex_normals = msh.vertex_normals.astype(np.float32)
-    
-    start_offset = len(scripts.numba_utils.classes.get_all_triangles_arr())
-    triangles = scripts.numba_utils.classes.create_and_register_triangles_from_obj_data(
-        vertex_indices_arr,
-        vertices,
-        vertex_normals,
-        mesh_idx,
-        start_offset,
-    )
-    if not triangles:
-        raise Exception
-    # append the triangles to the all triangles list
-    scripts.numba_utils.classes.add_to_all_triangles(triangles)
-    return triangles
+from .utils import get_triangles_from_obj, reset_global_datas
 
+reset_global_datas()
 
 # Reset all triangles, meshes, graphs and nodes
-scripts.numba_utils.classes.reset_all_triangles()
-Mesh.reset()
-chunker.BVHGraph.reset()
-chunker.BVHParentNode.reset()
+
 
 pass
 
@@ -354,7 +332,7 @@ def animate_camera_params(obj:Camera, i:int):
         obj.near_plane = Vector3(monkey_mesh.csys.pos - obj.csys.pos).squared_length ** 0.5
         obj.csys.pos = (1.0* monkey_mesh.csys.pos + obj.csys.pos) /2.0
     # obj.near_plane = Vector3(monkey_mesh.csys.pos - obj.csys.pos).squared_length ** 0.5
-    obj.bounces_per_ray = 6
+    obj.bounces_per_ray = 8
     obj.rays_per_pixel = 1
     obj.passes_per_frame = 10000
     obj.chunksx = 2
@@ -383,7 +361,7 @@ def animate_light_material(obj:Material, i, initial_material:Material):
 
 def get_frame_number(obj: Scene, i):
     # i = i
-    i = 120
+    i = 40
     obj.frame_number = i
     return obj.frame_number
 

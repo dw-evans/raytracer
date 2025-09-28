@@ -37,11 +37,11 @@ uniform int selectedMeshId;
 uniform float depthOfFieldStrength;
 uniform float antialiasStrength;
 
-uniform int chunkx;
-uniform int chunky;
+// uniform int chunkx;
+// uniform int chunky;
 
-uniform int chunksx;
-uniform int chunksy;
+// uniform int chunksx;
+// uniform int chunksy;
 
 uniform int MAX_CYCLES;
 
@@ -276,9 +276,10 @@ HitInfo raySphere(Ray ray, vec3 spherePos, float sphereRadius)
 }
 
 
-
 vec3 getEnvironmentLight(Ray ray)
 {
+
+    return vec3(0.0);
     
     // vec3 skyColor = vec3(0.5, 0.5, 1.0);
     vec3 skyColor = vec3(3.9216e-03, 6.9020e-01, 8.6275e-01);
@@ -287,9 +288,10 @@ vec3 getEnvironmentLight(Ray ray)
     // vec3 groundColor = vec3(1.0, 0.0, 1.0);
     vec3 sunlightDirection = normalize(vec3(-1.0, 0.2, -1.0));
     float sunFocus = 100.0;
-    float sunIntensity = 20.0;
+    // float sunIntensity = 100.0 / 20.0;
+    float sunIntensity = 0.0;
 
-    float skyGradientT = pow(smoothstep(0.0, 0.8, ray.dir.y), 0.35);
+    float skyGradientT = pow(smoothstep(0.0, 0.8, ray.dir.y), 0.6);
     float groundToSkyT = smoothstep(-0.01, 0.0, ray.dir.y);
 
     vec3 skyGradient = mix(skyColor2, skyColor, skyGradientT);
@@ -897,6 +899,11 @@ vec3 traceRay(inout Ray ray, inout uint rngState)
 
         } else 
         {
+            // float env_weighting = 1.0;
+            // // change luminance if it previously hit something
+            // if (ray.prevHit.didHit) {
+            //     env_weighting = 0.05;
+            // }
             // the ray misses all objects, pick up the environment color
             incomingLight += getEnvironmentLight(ray) * rayColor;
             break;
@@ -928,29 +935,18 @@ void main()
     }
 
 
-    vec2 fragAbsPos = (fragPosition.xy + 1.0) * 0.5;
+    // vec2 fragAbsPos = (fragPosition.xy + 1.0) * 0.5;
 
-    // bool inx = (fragAbsPos.x >= (chunkx/(chunksx))) && (fragAbsPos.x < ((chunkx+1)/(chunksx)));
-    // bool iny = (fragAbsPos.y >= (chunky/(chunksy))) && (fragAbsPos.y < ((chunky+1)/(chunksy)));
+    // bool inx = (fragAbsPos.x >= (chunkx / float(chunksx))) && (fragAbsPos.x < ((chunkx + 1) / float(chunksx)));
+    // bool iny = (fragAbsPos.y >= (chunky / float(chunksy))) && (fragAbsPos.y < ((chunky + 1) / float(chunksy)));
 
-    bool inx = (fragAbsPos.x >= (chunkx / float(chunksx))) && (fragAbsPos.x < ((chunkx + 1) / float(chunksx)));
-    bool iny = (fragAbsPos.y >= (chunky / float(chunksy))) && (fragAbsPos.y < ((chunky + 1) / float(chunksy)));
-
-    // bool inx =  (fragAbsPos.x >= (chunkx / float(chunksx))) &&
-    //             (fragAbsPos.x <= (chunkx + 1) / float(chunksx));
-    // bool iny =  (fragAbsPos.y >= (chunky / float(chunksy))) &&
-    //             (fragAbsPos.y <= (chunky + 1) / float(chunksy));
-
-
-    // if not in x or y, color is the sample of the previous texture (black or previous render.)
     // if (!(inx && iny)) {
-    if (!(inx && iny)) {
-        color =
-        texture(previousFrame, (fragPosition.xy + 1.0) / 2)
-        // vec4(1.0)
-        ;
-        return;
-    }
+    //     discard;
+    //     // color =
+    //     // texture(previousFrame, (fragPosition.xy + 1.0) / 2)
+    //     // ;
+    //     // return;
+    // }
     
     
     uint numPixels = screenWidth * screenHeight;
@@ -972,7 +968,7 @@ void main()
 
     float camNearPlane = ViewParams.z;
 
-    vec3 totalIncomingLight = vec3(0.0, 0.0, 0.0);
+    highp vec3 totalIncomingLight = vec3(0.0, 0.0, 0.0);
     for (int i = 0; i < RAYS_PER_PIXEL; i++)
     {
         float planeWidth = ViewParams.x;
@@ -1009,7 +1005,7 @@ void main()
         }
     }
 
-    totalIncomingLight /= RAYS_PER_PIXEL;
+    totalIncomingLight = totalIncomingLight / float(RAYS_PER_PIXEL);
 
     // HitInfo hit0 = rayTriangle(ray, getTriangle(0));
     // HitInfo hit1 = rayTriangle(ray, getTriangle(1));
