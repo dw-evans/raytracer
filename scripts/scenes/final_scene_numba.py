@@ -223,11 +223,7 @@ def animate_monkey(obj:Mesh, i):
     pass
     
 
-def smoothstep(edge0, edge1, x):
-    # normalize x to [0, 1]
-    t = np.clip((x - edge0) / (edge1 - edge0), 0.0, 1.0)
-    return t * t * (3 - 2 * t)
-
+from .utils import smoothstep
 
 def animate_rear_material(obj:Material, i):
     edge0 = 20
@@ -349,9 +345,6 @@ def animate_camera_params(obj:Camera, i:int):
     # obj.aspect
     # obj.fov
 
-def blend(factor, a, b):
-    return factor * a + (1-factor) * b
-
 def animate_light_material(obj:Material, i, initial_material:Material):
     edge0 = 50
     edge1 = edge0 + 20
@@ -366,7 +359,7 @@ def get_frame_number(obj: Scene, i):
     return obj.frame_number
 
 
-
+from .utils import blend
 import copy
 from functools import partial
 scene.animations.append(FrameAnimation(scene, get_frame_number))

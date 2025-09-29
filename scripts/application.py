@@ -120,7 +120,7 @@ class Application:
     ) -> None:
         # window params
 
-        factor = 1
+        factor = 4
         self.DYNAMIC_RENDER_FRAMERATE = 24
 
 
@@ -947,6 +947,7 @@ class RayTracerDynamic(ProgramABC):
         def update_graph_aabbs():
             for graph in BVHGraph.ALL:
                 graph.update_graph_node_aabbs_for_changed_triangles(force=False)
+                # graph.update_graph_node_aabbs_for_changed_triangles(force=True)
                 
         timer(update_graph_aabbs)()
 
@@ -1160,8 +1161,8 @@ class RayTracerDynamic(ProgramABC):
         # if not "time_of_last_frame_render_ns" in self.__dir__():
         #     self.time_of_last_frame_render_ns = 0
         # if (time.time_ns() - self.time_of_last_frame_render_ns) > 1 / framerate * 1e9:
-        if self.app_frame_counter > 60:
-            self.app_frame_counter = 0
+        # if self.app_frame_counter > 60:
+            # self.app_frame_counter = 0
         # self.time_of_last_frame_render_ns = time.time_ns()
         self.app_frame_counter += 1
         # get the frame number from the scene object
@@ -1198,6 +1199,8 @@ class RayTracerDynamic(ProgramABC):
                 program["frameNumber"].write(struct.pack("I", scene.cam.cycle_counter))
                 self.calculate_frame_via_chunking(scene, chunksx=scene.cam.chunksx, chunksy=scene.cam.chunksy, force_flip_once=True)
                 print(f"cycle={scene.cam.cycle_counter}")
+                if scene.cam.cycle_counter < 10:
+                    self.save_frame(self.fboB, self.app_frame_counter, cam.cycle_counter)
                 if not (scene.cam.cycle_counter % 10):
                     self.save_frame(self.fboB, self.app_frame_counter, cam.cycle_counter)
                 # time.sleep(0.01)

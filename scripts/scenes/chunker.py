@@ -99,6 +99,7 @@ class BVHGraph(object):
             
             for i, x in enumerate(self._nodes):
                 x.update_for_modified_triangles()
+                # print(i)
 
             self.unflag_for_mesh_update()
 
