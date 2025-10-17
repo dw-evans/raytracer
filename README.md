@@ -6,7 +6,9 @@ I previously posted this on LinkedIn. Feel free to continue here or find it on L
 
 Here is what I ended up with, but read on to see how we ended up here.
 
-<video controls src="article-assets/raytracer-export-linkedin-crf20.mp4" title="insert video"></video>
+[Watch full Video](article-assets/raytracer-export-linkedin-crf20.mp4)
+
+![alt text](f00001_c02000_f40001.png)
 
 All assets shown have been created for this article.
 
@@ -51,7 +53,7 @@ Once we have the intersection point, calculating the normal of the surface at th
 
 <!-- <video controls src="article-assets/01-sphere.mp4"></video> -->
 
-<video controls src="article-assets/01-spheres.mov" title="Title"></video>
+[Watch the video](article-assets/01-spheres.mov)
 
 ## Diffuse Reflections & Random Sampling
 
@@ -63,7 +65,7 @@ SphereWorld:
 
 <!-- <video controls src="article-assets/02-diffuse.mp4"></video> -->
 
-<video controls src="article-assets/02-diffuse.mov" title="Title"></video>
+[Watch the video](article-assets/02-diffuse.mov)
 
 
 ## Fragment Shaders and the GPU
@@ -140,7 +142,7 @@ Linking up the mouse to some quaternion-based rotations gives a (very) crude mov
 
 DebugCam in action. And no it isn't fun to use. The path-traced shader was also swapped for something less heavy to make moving around bearable.
 
-<video controls src="article-assets/04-debugcam.mov" title="Title"></video>
+[Watch the video](article-assets/04-debugcam.mov)
 
 ## Camera Parameters
 
@@ -154,11 +156,11 @@ It is mathematically quite simple to implement these angles- we just randomly nu
 
 This is the effect working on the GPU 
 
-<video controls src="article-assets/05-cam-settings-win.mp4" title="Title"></video> 
+[Watch the video](article-assets/05-cam-settings-win.mp4) 
 
 If we crank the values for the focal length and strength parameter we get some funky results.
 
-<video controls src="article-assets/05-cam-settings.mov" title="Title"></video>
+[Watch the video](article-assets/05-cam-settings.mov)
 
 ## Bloopers
 
@@ -166,11 +168,11 @@ Smooth sailing you might think? While it is easy to explain the mathematics in h
 
 Here's what happens if we remove the per-pixel randomness from diffuse reflections within each frame.
 
-<video controls src="article-assets/06-rng-removal.mov" title="Title"></video>
+[Watch the video](article-assets/06-rng-removal.mov)
 
 These black rings appeared when I tried implementing light transmission through the mesh. I was very confused, but eventually realised it is a floating point precision artefact.
 
-<video controls src="article-assets/07-fp-precis.mov" title="Title"></video>
+[Watch the video](article-assets/07-fp-precis.mov)
 
 And finally this screen tearing effect appeared when I pushed the renderer to high resolutions.
 
@@ -188,7 +190,7 @@ At this point, the project was left abandoned for over a year. The engine had co
 
 Regardless, I fixed by integer overflow issue set up a high resolution test scene to get an idea of how many cycles each frame would need. After an hour we've done 500 cycles of our 100-triangle scene at 1920x1080, but this render time didn't bode well for a higher quality render...
 
-<video controls src="article-assets/09-monkey.mov" title="Title"></video>
+[Watch the video](article-assets/09-monkey.mov)
 
 The performance issues stemmed from the fact that the triangle collision algorithm scaled linearly with triangle count. A 100x increase in triangle count, combined with a 100 frame animation would be about 10,000 times more work. This would take months to render, not to mention hundreds of GBP in electricity costs.
 
@@ -238,7 +240,7 @@ The improvement of JIT compilation was night and day - albeit I'll concede we ar
 
 After some major optimizations to the collision checking algorithm, more complex models would now render in a reasonable amount of time. We can now render this scene in just 5 minutes to test if things are working.
 
-<video controls src="article-assets/09-dragon-anim-1.mp4" title="Title"></video>
+[Watch the video](article-assets/09-dragon-anim-1.mp4)
 
 I then prepared a 4k static shot, and a 3 second 2560x1440 animation. But after timing a few passes of one frame on my home PC I realised the entire animation was going to take a couple of weeks to render... I'll remind you that while all this is running my computer becomes unusable - so instead I divvied up the work across a few 4070 Ti servers for around 6 days of total render time.
 
