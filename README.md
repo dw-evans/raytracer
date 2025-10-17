@@ -1,8 +1,18 @@
 # Writing a Path Traced Rendering Engine from Scratch
 
+## Foreword
+
+I previously posted this on LinkedIn. Feel free to continue here or find it on LinkedIn [here](https://www.linkedin.com/pulse/writing-renderer-from-scratch-daniel-evans-w1y8e/?trackingId=L8yY7gxsgmajJLFWl0gWdw%3D%3D).
+
+Here is what I ended up with, but read on to see how we ended up here.
+
+<video controls src="article-assets/raytracer-export-linkedin-crf20.mp4" title="insert video"></video>
+
+All assets shown have been created for this article.
+
 ## Introduction
 
-Last week I posted the result of a 3D engine and path traced renderer which I developed from scratch in Python and OpenGL fragment shaders. This produced quite a compelling result, but I thought I would share a bit more detail on what led me to the final result and what I learned along the way.
+Last week I posted the result of a 3D engine and path traced renderer which I developed from scratch in Python and OpenGL. This produced quite a compelling result, but I thought I would share a bit more detail on what led me to the final result and what I learned along the way.
 
 ![alt text](09-4k-dragon.png)
 
@@ -12,7 +22,7 @@ In the real world, light is emitted from light sources, such as the sun, or a li
 
 We might implement this within a computer program by generating random light rays from all light sources in a scene, and then measure how much light reaches the 'sensor' we write into the software. 
 
-![alt text](assets/animation_01_theory_2.gif)
+![alt text](article-assets/animation_01_theory_2.gif)
 
 As you might've spotted, this is horribly inefficient - statistically, nearly all of the light would miss our detector. Instead, path tracers implement this in reverse - initialize a ray with no light , keep track of how it reflects and changes colour, and wait for it to eventually hit a light source - if it doesn't hit a l light source it will remain dark. This reverse approach requires two components to be tracked:
 
@@ -21,7 +31,7 @@ As you might've spotted, this is horribly inefficient - statistically, nearly al
 
 This method is mathematically equivalent to the real flow of light from source to sink, but takes much less processing power. And if we send one ray out to calculate each pixel of our screen, we can produce a 2D image.
 
-![alt text](assets/animation_01_theory_1.gif) 
+![alt text](article-assets/animation_01_theory_1.gif) 
 
 A realistic approach to calculate the colour of the ray is to multiply the two colours. For example, a pure white light which hits a red material, would multiply to red. This is at least the case for 'diffuse' reflections which inherit the colour of the material; specular reflections tend to not pick up the colour of the material. 
 
@@ -35,13 +45,13 @@ A common first step in writing a path tracer is to render spheres, since it prov
  
 Detecting if a ray intersects a sphere in our scene involves a bit of algebra, but is fundamentally quite simple. If we draw out a ray intersecting a sphere, you'll notice it crosses the surface of the sphere twice - once on entry, and once on exit. Mathematically, this intersection is actually a quadratic equation with two roots - two real roots if it hits, or two imaginary roots if it misses, (or one repeated root if it grazes the surface...)
 
-![Ray Sphere Intersection Diagram](assets/animation_04_sphere_intersection.gif) 
+![Ray Sphere Intersection Diagram](article-assets/animation_04_sphere_intersection.gif) 
 
 Once we have the intersection point, calculating the normal of the surface at these points is simple - it is just the vector between the sphere's origin and the intersection. The X, Y and Z components of the normal vectors can be mapped to RGB colours which visualise the direction of the surface.
 
-<!-- <video controls src="assets/01-sphere.mp4"></video> -->
+<!-- <video controls src="article-assets/01-sphere.mp4"></video> -->
 
-<video controls src="assets/01-spheres.mov" title="Title"></video>
+<video controls src="article-assets/01-spheres.mov" title="Title"></video>
 
 ## Diffuse Reflections & Random Sampling
 
@@ -51,9 +61,9 @@ To account for this, all possible reflection directions need to be simulated. Fo
 
 SphereWorld:
 
-<!-- <video controls src="assets/02-diffuse.mp4"></video> -->
+<!-- <video controls src="article-assets/02-diffuse.mp4"></video> -->
 
-<video controls src="assets/02-diffuse.mov" title="Title"></video>
+<video controls src="article-assets/02-diffuse.mov" title="Title"></video>
 
 
 ## Fragment Shaders and the GPU
@@ -77,17 +87,17 @@ Shader programming is notorious for being difficult to debug. Unlike most code y
 
 For example, the red green and blue channels can encode normalised vectors quite nicely.
 
-![alt text](assets/animation_06_random_numbers.gif)
+![alt text](article-assets/animation_06_random_numbers.gif)
 
 So things like checking the directions of our rays are quite straightforward. This shot confirms the rays are bouncing randomly off our rough spheres, creating a noise-like texture:
 
-![alt text](assets/rng-noise.png)
+![alt text](article-assets/rng-noise.png)
 
 ## The Triangle
 
 While the spheres above were already looking quite realistic, their usefulness in 3D rendering is limited. Instead, triangles are the gold standard as they can be used to represent any 3D object accurately given a fine enough mesh.
 
-![**Mesh image***](assets/animation_02_mesh.gif)
+![**Mesh image***](article-assets/animation_02_mesh.gif)
 
 Unfortunately, our code doesn't yet know how to intersect triangles... Again, people much smarter than me have come up with quite an elegant solution. The process essentially boils down to testing if the intersection point lies on the left hand side of all three edges of the triangle. Using vector maths this becomes:
 
@@ -95,14 +105,14 @@ Unfortunately, our code doesn't yet know how to intersect triangles... Again, pe
 - Calculate the vector from triangle vertex v0 to point P: P_0.
 - Cross edge v0v1 with P, test if this is points away from the surface (i.e. P_0 is on the left of v0v1)
 - Repeat for all 3 sides.
-- 
-![alt text](assets/animation_05_tri_intersection.gif)
+
+![alt text](article-assets/animation_05_tri_intersection.gif)
 
 Getting the triangle collisions to run on the GPU was challenging, not least due to my complete lack of experience. Although straightforward in principle, the above equations embed quite a lot of logic and potential for errors. When I was unable to get the algorithm running in the shader, I sheepishly returned to the CPU to check if my implementation was correct.
 
 Sure enough, the pixels on screen were looking awfully triangle-like. This confirmed my logic had been correct all along, but something was going wrong when I ported the code to the GPU.
 
-![alt text](assets/03-triangle-image.png)
+![alt text](article-assets/03-triangle-image.png)
 
 
 I re-implemented the code back on the GPU, and used some spheres to visualise the vertices of the triangle in 3D space, but still nothing would show. My inexperience cost me some sanity here - but after a lot of debugging, I tracked the issue down to the memory buffers.
@@ -111,11 +121,11 @@ What am I talking about? Well, in shader programming, the application needs to p
 
 I eventually managed to get the triangle collision working on the GPU.
 
-<video controls src="assets/03-triangle.mp4"></video>
+<video controls src="article-assets/03-triangle.mp4"></video>
 
 The first fully loaded mesh looked quite strange due to incorrectly calculated normals
 
-![alt text](assets/03-mesh.png)
+![alt text](article-assets/03-mesh.png)
 
 ### Moving the Camera and Coordinate System Manipulation
 
@@ -130,7 +140,7 @@ Linking up the mouse to some quaternion-based rotations gives a (very) crude mov
 
 DebugCam in action. And no it isn't fun to use. The path-traced shader was also swapped for something less heavy to make moving around bearable.
 
-<video controls src="assets/04-debugcam.mov" title="Title"></video>
+<video controls src="article-assets/04-debugcam.mov" title="Title"></video>
 
 ## Camera Parameters
 
@@ -138,17 +148,17 @@ At this point, we've managed to generate spheres and triangles in our 3D world, 
 
 In a physical camera, the depth of field effect is caused by the shutter diameter. When it approaches zero, all light hitting an area of the sensor will come from the same direction, but as it grows, the same area will receive light from a range of different angles. This creates a blur effect for anything outside the plane of focus.
 
-![alt text](assets/animation_07_depth_of_field.gif)
+![alt text](article-assets/animation_07_depth_of_field.gif)
 
 It is mathematically quite simple to implement these angles- we just randomly nudge the ray's origin depending on a strength factor and nudge the angle accordingly to maintain the plane where the target will look sharp.
 
 This is the effect working on the GPU 
 
-<video controls src="assets/05-cam-settings-win.mp4" title="Title"></video> 
+<video controls src="article-assets/05-cam-settings-win.mp4" title="Title"></video> 
 
 If we crank the values for the focal length and strength parameter we get some funky results.
 
-<video controls src="assets/05-cam-settings.mov" title="Title"></video>
+<video controls src="article-assets/05-cam-settings.mov" title="Title"></video>
 
 ## Bloopers
 
@@ -156,19 +166,19 @@ Smooth sailing you might think? While it is easy to explain the mathematics in h
 
 Here's what happens if we remove the per-pixel randomness from diffuse reflections within each frame.
 
-<video controls src="assets/06-rng-removal.mov" title="Title"></video>
+<video controls src="article-assets/06-rng-removal.mov" title="Title"></video>
 
 These black rings appeared when I tried implementing light transmission through the mesh. I was very confused, but eventually realised it is a floating point precision artefact.
 
-<video controls src="assets/07-fp-precis.mov" title="Title"></video>
+<video controls src="article-assets/07-fp-precis.mov" title="Title"></video>
 
 And finally this screen tearing effect appeared when I pushed the renderer to high resolutions.
 
-![alt text](assets/09-integer-overflow.png)
+![alt text](article-assets/09-integer-overflow.png)
 
 On this last one, I had hacked at some Windows registry settings and my GPU would now flash red or blue randomly throughout the day. With that in mind I had to make a tough decision.
 
-![Red Button Decision Meme](assets/quick-meme.png)
+![Red Button Decision Meme](article-assets/quick-meme.png)
 
 I came back to the project a year later and figured out that it had just been an integer overflow all along...
 
@@ -178,7 +188,7 @@ At this point, the project was left abandoned for over a year. The engine had co
 
 Regardless, I fixed by integer overflow issue set up a high resolution test scene to get an idea of how many cycles each frame would need. After an hour we've done 500 cycles of our 100-triangle scene at 1920x1080, but this render time didn't bode well for a higher quality render...
 
-<video controls src="assets/09-monkey.mov" title="Title"></video>
+<video controls src="article-assets/09-monkey.mov" title="Title"></video>
 
 The performance issues stemmed from the fact that the triangle collision algorithm scaled linearly with triangle count. A 100x increase in triangle count, combined with a 100 frame animation would be about 10,000 times more work. This would take months to render, not to mention hundreds of GBP in electricity costs.
 
@@ -192,11 +202,11 @@ The most costly part of the algorithm is knowing which triangle the ray actually
 
 I had implemented this so far by wrapping one bounding box around each mesh. If the ray doesn't pass through a mesh's bounding box, skip all collisions with that mesh. If the mesh occupies say, 30% of the screen, 70% of the rays might be cheap to calculate - nice.
 
-![alt text](assets/animation_03_bbox_single.gif)
+![alt text](article-assets/animation_03_bbox_single.gif)
 
 The efficacy of this approach is limited. The more effective approach is to use this method again and again recursively *within* the mesh. For example, if we split a mesh into left and right triangle groups, with a 1000 triangle mesh, instead of 1000 triangle collisions we would calculate only 500, plus two bounding box checks, one for each side - a 50% cost reduction per ray. Implementing this recursively offers even more gains, by splitting each half into two halves and so on. Notice that in between each step we shrink the bounding box down to the new set of vertices.
 
-![alt text](assets/animation_03_bbox.gif)
+![alt text](article-assets/animation_03_bbox.gif)
 
 This recursive structure is called a Bounding Volume Hierarchy. This is essentially a *graph* of bounding boxes we can efficiently traverse to resolve the 10 triangles we should check, out of 10,000, in exchange for 10-20 cheap bounding box checks. 
 
@@ -204,7 +214,7 @@ Visualising the number of bounding box collisions with the new algorithm is quit
 
 In the background I'd prepared a more interesting looking scene for some benchmarking. Ignore the blue-ness - I still need to learn about tone mapping and HDR images...
 
-![alt text](assets/09-dragon-cont.png)
+![alt text](article-assets/09-dragon-cont.png)
 
 For the first rays emitted, we can visualise the number of bounding box collisions performed to see how much work goes into each pixel. The dragon mesh is 10,000 triangles for reference, so roughly 10 bounding box checks is massively more efficient. 
 
@@ -228,15 +238,13 @@ The improvement of JIT compilation was night and day - albeit I'll concede we ar
 
 After some major optimizations to the collision checking algorithm, more complex models would now render in a reasonable amount of time. We can now render this scene in just 5 minutes to test if things are working.
 
-<video controls src="assets/09-dragon-anim-1.mp4" title="Title"></video>
+<video controls src="article-assets/09-dragon-anim-1.mp4" title="Title"></video>
 
 I then prepared a 4k static shot, and a 3 second 2560x1440 animation. But after timing a few passes of one frame on my home PC I realised the entire animation was going to take a couple of weeks to render... I'll remind you that while all this is running my computer becomes unusable - so instead I divvied up the work across a few 4070 Ti servers for around 6 days of total render time.
 
-![alt text](09-4k-dragon.png)
+![alt text](article-assets/09-4k-dragon.png)
 
-Mixing in some HDR postprocessing we end up with the final result.
-
-<video controls src="assets/raytracer-export-linkedin-crf20.mp4" title="insert video"></video>
+Mixing in some HDR postprocessing we end up with the final result shown at the start.
 
 The amount of computing going on here is quite ridiculous when you think about it. The 4k scene requires 238 billion ray casts, and the video took 7.1 trillion.
 
