@@ -8,7 +8,7 @@ Here is what I ended up with, but read on to see how we ended up here.
 
 [Watch full Video](article-assets/raytracer-export-linkedin-crf20.mp4)
 
-![alt text](f00001_c02000_f40001.png)
+![alt text](article-assets/f00001_c02000_f40001.png)
 
 All assets shown have been created for this article.
 
@@ -16,7 +16,7 @@ All assets shown have been created for this article.
 
 Last week I posted the result of a 3D engine and path traced renderer which I developed from scratch in Python and OpenGL. This produced quite a compelling result, but I thought I would share a bit more detail on what led me to the final result and what I learned along the way.
 
-![alt text](09-4k-dragon.png)
+![alt text](article-assets/09-4k-dragon.png)
 
 ### A Quick Theory Lesson
 
